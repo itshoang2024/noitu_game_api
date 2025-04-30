@@ -1,0 +1,19 @@
+noi_tu_api/
+│   .env
+│   main.py
+│   requirements.txt
+│
+└───app
+    │   config.py
+    │   __init__.py
+    ├───api
+    │       endpoints.py
+    │       middleware.py
+    ├───models
+    │       schemas.py
+    ├───services
+    │       ai_service.py
+    │       game_service.py
+    └───utils
+            logging.py
+            validators.py

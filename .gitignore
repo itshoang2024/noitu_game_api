@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+
+# Log files
+*.log
+*.log.*
+
+# Local dev logs or debug outputs
+*.sqlite3
+*.db
+*.pid
+*.gz
+
+# VSCode / IDE settings
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Python egg files
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Test outputs
+htmlcov/
+coverage.xml
+.pytest_cache/
+
+# FastAPI/Uvicorn logs
+noitu_api_*.log
+
+# Ignore exported artifacts
+*.zip
+*.tar.gz
+
+# Node modules (if any frontend in same repo)
+node_modules/
+
+# Cache folders
+.cache/
