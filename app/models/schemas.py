@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 
 class WordRequest(BaseModel):
@@ -9,6 +9,7 @@ class WordResponse(BaseModel):
     answer: str = Field(..., description="The AI's response word")
     status: str = Field(..., description="Status of the response (success or error)")
     model: Optional[str] = Field(None, description="Model ID used for generating response")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the response")
 
 class StatusResponse(BaseModel):
     status: str = Field(..., description="Current status of the API (ready or initializing)")

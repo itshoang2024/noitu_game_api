@@ -51,33 +51,51 @@ async def ask_ai(req: Request, background_tasks: BackgroundTasks):
         MAX_RETRY = 3
         attempts = 0
         reply = None
+        best_score = 0.0
+        quality_threshold = 0.6
 
         while attempts < MAX_RETRY:
-            reply = await ai_service.generate_response(user_input)
+            # Generate high-quality response
+            reply, score = await ai_service.generate_high_quality_response(
+                user_input, 
+                max_attempts=2,
+                quality_threshold=quality_threshold,
+                session_id=session_id
+            )
+            
+            logger.info(f"Attempt {attempts+1}/{MAX_RETRY}: Generated '{reply}' with quality score {score:.2f}")
 
             if not reply or reply.startswith("Lỗi:"):
                 logger.error(f"AI error on attempt {attempts+1}: {reply}")
-                raise HTTPException(status_code=500, detail=f"AI failed to generate a response. {reply}")
+                attempts += 1
+                continue
 
             if not game_service.validate_word_pair(user_input, reply):
-                logger.error(f"AI error on attempt {attempts+1}: {reply}")
-                raise HTTPException(status_code=500, detail=f"AI failed to generate a response. {reply}")
+                logger.error(f"Invalid word pair on attempt {attempts+1}: {user_input} -> {reply}")
+                attempts += 1
+                continue
 
             if game_service.is_word_used(session_id, reply):
                 logger.info(f"Từ '{reply}' đã được dùng, thử lại...")
                 attempts += 1
                 continue
 
-            is_valid, reason = await ai_service.validate_vietnamese_word(reply)
-            if not is_valid:
-                logger.info(f"Từ '{reply}' không hợp lệ: {reason}, thử lại...")
-                attempts += 1
-                continue
-
-            # Nếu vừa chưa dùng và hợp lệ thì dùng được
+            # Check quality score
+            if score < quality_threshold:
+                # Keep track of best response so far
+                if score > best_score:
+                    best_score = score
+                
+                # Only retry if we haven't reached the maximum attempts
+                if attempts < MAX_RETRY - 1:
+                    logger.info(f"Từ '{reply}' có chất lượng thấp (score: {score:.2f}), thử lại...")
+                    attempts += 1
+                    continue
+            
+            # If word passes all checks, use it
             break
 
-        # Nếu vẫn không tìm được từ phù hợp sau MAX_RETRY lần
+        # If we still don't have a valid response after all attempts
         if not reply or game_service.is_word_used(session_id, reply):
             return WordResponse(
                 answer="Không thể tìm được từ phù hợp, vui lòng thử lại.",
@@ -88,6 +106,10 @@ async def ask_ai(req: Request, background_tasks: BackgroundTasks):
         # If successful, register the AI's word in the used words
         game_service.register_word(session_id, reply)
         
+        # Add to word evaluator dictionary in background
+        word_evaluator = ai_service.word_evaluator
+        background_tasks.add_task(word_evaluator.add_to_dictionary, reply)
+        
         # Run cleanup in background occasionally
         if session_id != "default":
             background_tasks.add_task(game_service.cleanup_old_sessions)
@@ -95,7 +117,10 @@ async def ask_ai(req: Request, background_tasks: BackgroundTasks):
         return WordResponse(
             answer=reply,
             status="success",
-            model=settings.MODEL_ID
+            model=settings.MODEL_ID,
+            metadata={
+                "quality_score": f"{best_score:.2f}" if best_score > 0 else f"{quality_threshold:.2f}"
+            }
         )
         
     except HTTPException:
@@ -103,7 +128,7 @@ async def ask_ai(req: Request, background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
+    
 @router.get("/status", response_model=StatusResponse)
 async def check_status():
     """Check the status of the AI service"""
@@ -239,4 +264,124 @@ async def get_starting_word(data: dict = Body(...)):
         model=settings.MODEL_ID
     )
 
+@router.get("/dictionary/stats")
+async def get_dictionary_stats():
+    """Get statistics about the word dictionary"""
+    ai_service, _ = get_services()
+    word_evaluator = ai_service.word_evaluator
+    
+    await word_evaluator.ensure_initialized()
+    
+    return {
+        "dictionary_size": len(word_evaluator.dictionary),
+        "common_words_count": len(word_evaluator.common_words),
+        "evaluated_words_count": len(word_evaluator.word_scores)
+    }
 
+@router.post("/dictionary/add")
+async def add_word_to_dictionary(req: Request):
+    """Add a word to the dictionary"""
+    try:
+        data = await req.json()
+        word = data.get("word", "").strip().lower()
+        
+        if not word:
+            raise HTTPException(status_code=400, detail="Từ không được để trống")
+        
+        ai_service, _ = get_services()
+        word_evaluator = ai_service.word_evaluator
+        
+        result = await word_evaluator.add_to_dictionary(word)
+        
+        if result:
+            return {"status": "success", "message": f"Đã thêm từ '{word}' vào từ điển"}
+        else:
+            return {"status": "error", "message": f"Từ '{word}' đã tồn tại hoặc không thể thêm vào từ điển"}
+    except Exception as e:
+        logger.error(f"Error adding word to dictionary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi: {str(e)}")
+
+@router.get("/quality/{word}")
+async def get_word_quality(word: str):
+    """Get the quality score for a specific word"""
+    if not word:
+        raise HTTPException(status_code=400, detail="Từ không được để trống")
+    
+    ai_service, _ = get_services()
+    word_evaluator = ai_service.word_evaluator
+    
+    score, reason = await word_evaluator.evaluate_word(word)
+    
+    return {
+        "word": word,
+        "quality_score": score,
+        "reason": reason,
+        "is_in_dictionary": word_evaluator.is_in_dictionary(word),
+        "is_common_word": word_evaluator.is_common_word(word)
+    }
+
+@router.get("/performance")
+async def get_ai_performance():
+    """Get performance metrics for the AI service"""
+    ai_service, _ = get_services()
+    
+    # Get basic performance metrics
+    metrics = ai_service.get_performance_metrics()
+    
+    # Get word quality distribution
+    quality_scores = ai_service.get_quality_scores()
+    
+    ranges = {
+        "excellent": 0,  # 0.8-1.0
+        "good": 0,       # 0.6-0.8
+        "average": 0,    # 0.4-0.6
+        "poor": 0,       # 0.2-0.4
+        "very_poor": 0   # 0.0-0.2
+    }
+    
+    for word, score in quality_scores.items():
+        if score >= 0.8:
+            ranges["excellent"] += 1
+        elif score >= 0.6:
+            ranges["good"] += 1
+        elif score >= 0.4:
+            ranges["average"] += 1
+        elif score >= 0.2:
+            ranges["poor"] += 1
+        else:
+            ranges["very_poor"] += 1
+    
+    quality_distribution = {
+        "total_evaluated": len(quality_scores),
+        "distribution": ranges
+    }
+    
+    return {
+        "performance": metrics,
+        "quality": quality_distribution
+    }
+
+@router.get("/quality_stats")
+async def get_quality_stats():
+    """Get quality statistics over time"""
+    ai_service, _ = get_services()
+    
+    # Get quality tracker stats
+    stats = ai_service.quality_tracker.get_summary_stats()
+    
+    # Get recent quality data for plotting
+    recent_metrics = ai_service.quality_tracker.metrics[-50:] if len(ai_service.quality_tracker.metrics) > 0 else []
+    
+    # Format for plotting
+    plot_data = [
+        {
+            "word": m["word"],
+            "score": m["score"],
+            "timestamp": m["timestamp"]
+        } for m in recent_metrics
+    ]
+    
+    return {
+        "summary": stats,
+        "recent_data": plot_data
+    }

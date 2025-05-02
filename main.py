@@ -37,14 +37,25 @@ app.add_middleware(
 # Include API router
 app.include_router(router)
 
+# Cập nhật trong main.py
+
 # Initialize AI service during startup
 @app.on_event("startup")
 async def startup_event():
     """Initialize services when the server starts"""
     logger.info(f"Khởi động API nối từ với model {settings.MODEL_ID}")
     
-    # Initialize AI service and start warm-up
     ai_service = AIService.get_instance()
+    
+    # Create the data directory if it doesn't exist
+    import os
+    os.makedirs("./data", exist_ok=True)
+    
+    # Initialize the word evaluator
+    from app.utils.word_evaluator import WordEvaluator
+    word_evaluator = WordEvaluator.get_instance()
+    await word_evaluator.initialize()
+    
     # Run warm-up in the background
     asyncio.create_task(ai_service.warm_up_model())
 
