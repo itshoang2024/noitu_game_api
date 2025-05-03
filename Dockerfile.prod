@@ -1,0 +1,42 @@
+# Build stage
+FROM python:3.10-slim as builder
+
+WORKDIR /app
+
+# Cài đặt các công cụ build
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc
+
+# Cài đặt dependencies
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+# Final stage
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Sao chép wheels từ build stage
+COPY --from=builder /app/wheels /wheels
+RUN pip install --no-cache /wheels/*
+
+# Thiết lập biến môi trường
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBUG=False
+
+# Sao chép mã nguồn 
+COPY . .
+
+# Chạy script tạo từ điển
+RUN python -m scripts.create_dictionary
+
+# Tạo người dùng không có quyền root
+RUN adduser --disabled-password --gecos '' appuser
+USER appuser
+
+# Mở cổng cho FastAPI
+EXPOSE 8800
+
+# Khởi động ứng dụng với gunicorn
+CMD ["gunicorn", "main:app", "--bind", "0.0.0.0:8800", "--worker-class", "uvicorn.workers.UvicornWorker", "--workers", "4"]

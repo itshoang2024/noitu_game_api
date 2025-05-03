@@ -1,0 +1,142 @@
+[
+  {
+    "timestamp": "2025-05-03T18:52:13.187307",
+    "word": "tập vở",
+    "score": 0.6,
+    "user_input": "bài tập",
+    "session_id": "e4ee73bb-f198-46a6-8f84-c8cf0e9b5866"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:14.033896",
+    "word": "tập vở",
+    "score": 0.6,
+    "user_input": "bài tập",
+    "session_id": "e4ee73bb-f198-46a6-8f84-c8cf0e9b5866"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:19.582501",
+    "word": "ly cà phê",
+    "score": 0.5,
+    "user_input": "vở ô ly",
+    "session_id": "e4ee73bb-f198-46a6-8f84-c8cf0e9b5866"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:31.937416",
+    "word": "dã man",
+    "score": 0.6,
+    "user_input": "hoang dã",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:35.689131",
+    "word": "mác áo",
+    "score": 0.6,
+    "user_input": "man mác",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:36.175567",
+    "word": "mác áo",
+    "score": 0.6,
+    "user_input": "man mác",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:40.265216",
+    "word": "len dạ",
+    "score": 0.6,
+    "user_input": "áo len",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:40.941868",
+    "word": "len dạ",
+    "score": 0.6,
+    "user_input": "áo len",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:45.627761",
+    "word": "dày cơm",
+    "score": 0.6,
+    "user_input": "dạ dày",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:51.938457",
+    "word": "nước mắm",
+    "score": 0.7,
+    "user_input": "cơm nước",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:56.691630",
+    "word": "nhĩ mục",
+    "score": 0.6,
+    "user_input": "mắm nhĩ",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:52:57.139589",
+    "word": "nhĩ mục",
+    "score": 0.6,
+    "user_input": "mắm nhĩ",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:01.777154",
+    "word": "nát tan",
+    "score": 0.6,
+    "user_input": "mục nát",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:06.104713",
+    "word": "tác giả",
+    "score": 0.6,
+    "user_input": "tan tác",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:18.141460",
+    "word": "hành lý",
+    "score": 0.6,
+    "user_input": "học hành",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:27.625693",
+    "word": "giải phẫu",
+    "score": 0.6,
+    "user_input": "lý giải",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:33.131161",
+    "word": "thuật ngữ",
+    "score": 0.6,
+    "user_input": "phẫu thuật",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:37.286587",
+    "word": "cảnh sát",
+    "score": 0.6,
+    "user_input": "ngữ cảnh",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:42.290332",
+    "word": "sao biển",
+    "score": 0.6,
+    "user_input": "sát sao",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-03T18:53:46.468303",
+    "word": "cả nhà",
+    "score": 0.6,
+    "user_input": "biển cả",
+    "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  }
+]
