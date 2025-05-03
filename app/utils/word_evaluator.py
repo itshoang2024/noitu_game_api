@@ -73,10 +73,11 @@ class WordEvaluator:
                 logger.warning(f"Common words file not found or invalid at {self.common_words_path}, creating minimal list")
                 self._create_minimal_common_words()
                 
+            # Important: Set is_initialized first before building word chains
+            self.is_initialized = True
+                
             # Build word chains
             await self.build_word_chains()
-                
-            self.is_initialized = True
                 
         except Exception as e:
             logger.error(f"Error initializing WordEvaluator: {str(e)}")
@@ -233,9 +234,6 @@ class WordEvaluator:
     
     async def build_word_chains(self):
         """Build word chains for faster suggestion and validation"""
-        if not self.is_initialized:
-            await self.initialize()
-        
         self.word_chains = {}
         
         # Process all words in dictionary

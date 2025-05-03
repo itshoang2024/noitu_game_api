@@ -51,4 +51,6 @@ node_modules/
 
 # Cache folders
 .cache/
-data/
+
+# VSCode Temp Files
+tempCodeRunnerFile.py

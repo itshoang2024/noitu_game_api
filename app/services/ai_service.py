@@ -184,7 +184,7 @@ class AIService:
         start_time = time.time()
         
         # Limit concurrent requests during warm-up 
-        batch_size = 4  # Chỉ xử lý 4 từ một lúc
+        batch_size = 6  # Chỉ xử lý 4 từ một lúc
         semaphore = asyncio.Semaphore(3)  # Giới hạn đồng thời tối đa 3 yêu cầu
         
         async def warm_up_word(word):
@@ -247,7 +247,7 @@ class AIService:
         
         self.is_ready = True
 
-    async def generate_response(self, user_input: str, use_cache: bool = True, max_retries: int = None, quality_threshold: float = 0.4) -> str:
+    async def generate_response(self, user_input: str, use_cache: bool = True, max_retries: int = None, quality_threshold: float = 0.4, skip_quality_check: bool = False) -> str:
         """Generate a response from Gemini API with retry logic and quality check"""
         if max_retries is None:
             max_retries = settings.MAX_RETRIES
@@ -335,6 +335,14 @@ class AIService:
                             quality_retries += 1
                             logger.info(f"Trying again to get a better formatted word (attempt {quality_retries}/{max_quality_retries})")
                             continue
+                    
+                    if skip_quality_check:
+                        if reply and not reply.startswith("Lỗi:"):
+                            self.word_cache[user_input] = reply
+                            self.successful_requests += 1
+                        else:
+                            self.failed_requests += 1
+                        return reply
                     
                     # Evaluate word quality
                     quality_score, reason = await self.word_evaluator.evaluate_word(reply)
@@ -543,86 +551,86 @@ class AIService:
         prompt = f"Từ '{word}' có phải là một từ có nghĩa trong tiếng Việt không? Chỉ trả lời 'có' hoặc 'không'."
         
         try:
-            result = await self.generate_response(prompt, use_cache=True)
+            result = await self.generate_response(prompt, use_cache=True, skip_quality_check=True)
             is_valid = result.lower().startswith("có")
             
             reason = "Từ có nghĩa" if is_valid else "Từ không tồn tại hoặc không có nghĩa"
             return is_valid, reason
         except Exception as e:
             logger.error(f"Error checking word meaning: {str(e)}")
-            return False, f"Lỗi kiểm tra nghĩa: {str(e)}"
+            return False, f"Lỗi kiểm tra nghĩa: {str(e)}"    
         
-async def get_theme_words(self, theme: str) -> List[str]:
-    """Lấy từ theo chủ đề từ bộ nhớ đệm hoặc tạo mới"""
-    if theme in self.quality_tracker.theme_words_cache:
-        # Lấy từ bộ nhớ đệm nếu có
-        logger.info(f"Sử dụng từ đã cache cho chủ đề '{theme}'")
-        return self.quality_tracker.theme_words_cache[theme]
-    
-    # Định nghĩa từ theo chủ đề
-    theme_mapping = {
-        "food": ["thức ăn", "món ăn", "bánh mì", "cơm gạo", "rau củ", "trái cây", 
-                "hoa quả", "thịt cá", "nước uống", "đồ ngọt", "bữa tiệc", 
-                "nhà hàng", "quán ăn", "bếp núc", "gia vị", "mì gói"],
-        "animals": ["con vật", "động vật", "con chó", "con mèo", "con cá", "con chim",
-                   "thú rừng", "thú cưng", "loài vật", "côn trùng", "gia súc",
-                   "chim muông", "thú hoang", "rắn rết", "cá tôm", "gấu bẹo"],
-        "nature": ["thiên nhiên", "núi non", "sông ngòi", "biển cả", "bầu trời",
-                  "mây mưa", "nắng gió", "rừng rậm", "cây cối", "hoa lá",
-                  "đồng cỏ", "bãi biển", "thác nước", "hang động", "sa mạc"],
-        "education": ["học tập", "trường học", "lớp học", "sinh viên", "học sinh",
-                     "giáo viên", "bài tập", "sách vở", "kiến thức", "trí tuệ",
-                     "đại học", "giảng đường", "thư viện", "khóa học", "môn học"],
-        "technology": ["công nghệ", "máy tính", "điện thoại", "mạng lưới", "thiết bị",
-                      "phần mềm", "thông tin", "dữ liệu", "kỹ thuật", "ứng dụng",
-                      "trí tuệ", "robot", "mạng xã", "máy móc", "khoa học"],
-        "sports": ["thể thao", "bóng đá", "bóng rổ", "cầu lông", "bơi lội",
-                  "võ thuật", "chạy bộ", "đạp xe", "thể dục", "sân vận",
-                  "vận động", "sức khỏe", "huấn luyện", "cầu thủ", "vận động"],
-        "family": ["gia đình", "cha mẹ", "con cái", "anh em", "chị em",
-                  "ông bà", "họ hàng", "tổ tiên", "tình thương", "hạnh phúc",
-                  "kỷ niệm", "tương lai", "mái ấm", "tình yêu", "thân thuộc"]
-    }
-    
-    words = []
-    
-    # Nếu có sẵn từ theo chủ đề
-    if theme in theme_mapping:
-        words = theme_mapping[theme]
-        logger.info(f"Sử dụng {len(words)} từ có sẵn cho chủ đề '{theme}'")
-    
-    # Nếu là chủ đề tùy chỉnh, sử dụng Gemini để gợi ý
-    elif theme != "random":
-        prompt = f"Hãy liệt kê 10 từ tiếng Việt gồm 2-3 âm tiết thuộc chủ đề '{theme}'. Mỗi từ phải có nghĩa cụ thể và thường gặp trong đời sống. Chỉ trả lời bằng các từ, mỗi từ một dòng."
+    async def get_theme_words(self, theme: str) -> List[str]:
+        """Lấy từ theo chủ đề từ bộ nhớ đệm hoặc tạo mới"""
+        if theme in self.quality_tracker.theme_words_cache:
+            # Lấy từ bộ nhớ đệm nếu có
+            logger.info(f"Sử dụng từ đã cache cho chủ đề '{theme}'")
+            return self.quality_tracker.theme_words_cache[theme]
         
-        try:
-            result = await self.generate_response(prompt, use_cache=False)
+        # Định nghĩa từ theo chủ đề
+        theme_mapping = {
+            "food": ["thức ăn", "món ăn", "bánh mì", "cơm gạo", "rau củ", "trái cây", 
+                    "hoa quả", "thịt cá", "nước uống", "đồ ngọt", "bữa tiệc", 
+                    "nhà hàng", "quán ăn", "bếp núc", "gia vị", "mì gói"],
+            "animals": ["con vật", "động vật", "con chó", "con mèo", "con cá", "con chim",
+                    "thú rừng", "thú cưng", "loài vật", "côn trùng", "gia súc",
+                    "chim muông", "thú hoang", "rắn rết", "cá tôm", "gấu bẹo"],
+            "nature": ["thiên nhiên", "núi non", "sông ngòi", "biển cả", "bầu trời",
+                    "mây mưa", "nắng gió", "rừng rậm", "cây cối", "hoa lá",
+                    "đồng cỏ", "bãi biển", "thác nước", "hang động", "sa mạc"],
+            "education": ["học tập", "trường học", "lớp học", "sinh viên", "học sinh",
+                        "giáo viên", "bài tập", "sách vở", "kiến thức", "trí tuệ",
+                        "đại học", "giảng đường", "thư viện", "khóa học", "môn học"],
+            "technology": ["công nghệ", "máy tính", "điện thoại", "mạng lưới", "thiết bị",
+                        "phần mềm", "thông tin", "dữ liệu", "kỹ thuật", "ứng dụng",
+                        "trí tuệ", "robot", "mạng xã", "máy móc", "khoa học"],
+            "sports": ["thể thao", "bóng đá", "bóng rổ", "cầu lông", "bơi lội",
+                    "võ thuật", "chạy bộ", "đạp xe", "thể dục", "sân vận",
+                    "vận động", "sức khỏe", "huấn luyện", "cầu thủ", "vận động"],
+            "family": ["gia đình", "cha mẹ", "con cái", "anh em", "chị em",
+                    "ông bà", "họ hàng", "tổ tiên", "tình thương", "hạnh phúc",
+                    "kỷ niệm", "tương lai", "mái ấm", "tình yêu", "thân thuộc"]
+        }
+        
+        words = []
+        
+        # Nếu có sẵn từ theo chủ đề
+        if theme in theme_mapping:
+            words = theme_mapping[theme]
+            logger.info(f"Sử dụng {len(words)} từ có sẵn cho chủ đề '{theme}'")
+        
+        # Nếu là chủ đề tùy chỉnh, sử dụng Gemini để gợi ý
+        elif theme != "random":
+            prompt = f"Hãy liệt kê 10 từ tiếng Việt gồm 2-3 âm tiết thuộc chủ đề '{theme}'. Mỗi từ phải có nghĩa cụ thể và thường gặp trong đời sống. Chỉ trả lời bằng các từ, mỗi từ một dòng."
             
-            if not result.startswith("Lỗi:"):
-                words = [word.strip() for word in result.split('\n') if word.strip()]
-                logger.info(f"Tạo {len(words)} từ mới cho chủ đề '{theme}' từ Gemini")
+            try:
+                result = await self.generate_response(prompt, use_cache=False)
                 
-                # Đánh giá chất lượng các từ nhận được
-                validated_words = []
-                for word in words:
-                    # Kiểm tra nếu từ có ít nhất 2 âm tiết
-                    if len(word.split()) >= 2:
-                        quality, _ = await self.word_evaluator.evaluate_word(word)
-                        if quality >= 0.4:  # Chỉ giữ lại từ có chất lượng tốt
-                            validated_words.append(word)
-                            # Lưu điểm chất lượng
-                            self.quality_scores[word] = quality
-                
-                words = validated_words
-        except Exception as e:
-            logger.error(f"Lỗi khi tạo từ cho chủ đề '{theme}': {str(e)}")
-            words = []
-    
-    # Nếu vẫn không có từ nào, trả về danh sách trống
-    if not words:
-        logger.warning(f"Không tìm thấy từ nào cho chủ đề '{theme}'")
-        return []
-    
-    # Lưu vào bộ nhớ đệm
-    self.quality_tracker.theme_words_cache[theme] = words
-    return words
+                if not result.startswith("Lỗi:"):
+                    words = [word.strip() for word in result.split('\n') if word.strip()]
+                    logger.info(f"Tạo {len(words)} từ mới cho chủ đề '{theme}' từ Gemini")
+                    
+                    # Đánh giá chất lượng các từ nhận được
+                    validated_words = []
+                    for word in words:
+                        # Kiểm tra nếu từ có ít nhất 2 âm tiết
+                        if len(word.split()) >= 2:
+                            quality, _ = await self.word_evaluator.evaluate_word(word)
+                            if quality >= 0.4:  # Chỉ giữ lại từ có chất lượng tốt
+                                validated_words.append(word)
+                                # Lưu điểm chất lượng
+                                self.quality_scores[word] = quality
+                    
+                    words = validated_words
+            except Exception as e:
+                logger.error(f"Lỗi khi tạo từ cho chủ đề '{theme}': {str(e)}")
+                words = []
+        
+        # Nếu vẫn không có từ nào, trả về danh sách trống
+        if not words:
+            logger.warning(f"Không tìm thấy từ nào cho chủ đề '{theme}'")
+            return []
+        
+        # Lưu vào bộ nhớ đệm
+        self.quality_tracker.theme_words_cache[theme] = words
+        return words

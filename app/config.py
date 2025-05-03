@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     MAX_VALIDATION_RETRIES: int = 3  # Số lần thử tối đa khi kiểm tra từ
 
     # Game settings
-    ENABLE_WARM_UP: bool = False  # Tắt trong môi trường phát triển
+    ENABLE_WARM_UP: bool = True  # Tắt trong môi trường phát triển
 
     # Các bộ từ warm-up
     WARM_UP_WORDS_HOUSEHOLD: List[str] = [
