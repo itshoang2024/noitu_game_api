@@ -1,10 +1,11 @@
-fastapi>=0.95.0
-uvicorn>=0.21.1
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-python-dotenv>=1.0.0
-httpx>=0.24.0
-aiofiles>=23.1.0
-pytest>=7.3.1
-pytest-asyncio>=0.21.0
-colorama>=0.4.4
+--upgrade pip
+fastapi
+uvicorn
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+aiofiles
+pytest
+pytest-asyncio
+colorama
