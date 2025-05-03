@@ -14,17 +14,19 @@ from datetime import datetime
 import json
 import os
 
+from app.utils.constants import QUALITY_METRICS_PATH
+
 class QualityTracker:
     """Tracks word quality metrics over time"""
     
-    def __init__(self, file_path=None):
+    def __init__(self):
         """Initialize quality tracker with proper path"""
-        import os
-        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        self.file_path = file_path or os.path.join(base_dir, "data", "quality_metrics.json")
+        self.file_path = QUALITY_METRICS_PATH
         self.metrics = []
+        self.theme_words_cache: Dict[str, List[str]] = {}  # Lưu trữ từ theo chủ đề
         self.load_metrics()
-    
+        self.load_theme_words()  # Tải chủ đề khi khởi tạo
+
     def load_metrics(self):
         """Load existing metrics from file"""
         try:
@@ -114,6 +116,30 @@ class QualityTracker:
             "avg_score_month": self.get_average_score('month')
         }
     
+    async def save_theme_words(self):
+        """Lưu danh sách từ theo chủ đề vào file"""
+        try:
+            theme_file_path = os.path.join(os.path.dirname(self.file_path), "theme_words.json")
+            with open(theme_file_path, 'w', encoding='utf-8') as f:
+                json.dump(self.theme_words_cache, f, ensure_ascii=False, indent=2)
+            logger.info(f"Đã lưu {len(self.theme_words_cache)} chủ đề vào {theme_file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Lỗi khi lưu từ theo chủ đề: {str(e)}")
+            return False
+    
+    def load_theme_words(self):
+        """Tải danh sách từ theo chủ đề từ file"""
+        try:
+            theme_file_path = os.path.join(os.path.dirname(self.file_path), "theme_words.json")
+            if os.path.exists(theme_file_path):
+                with open(theme_file_path, 'r', encoding='utf-8') as f:
+                    self.theme_words_cache = json.load(f)
+                logger.info(f"Đã tải {len(self.theme_words_cache)} chủ đề từ {theme_file_path}")
+        except Exception as e:
+            logger.error(f"Lỗi khi tải từ theo chủ đề: {str(e)}")
+            self.theme_words_cache = {}
+
 class AIService:
     """Service for interacting with Gemini AI API"""
     _instance = None
@@ -150,56 +176,78 @@ class AIService:
         if self.http_client:
             await self.http_client.aclose()
             logger.info("HTTP client closed")
-    
+
     async def warm_up_model(self):
         """Warm up the model with predefined words"""
         logger.info("Starting model warm-up...")
         await self.initialize()  # Ensure word evaluator is initialized
         start_time = time.time()
         
-        # Limit concurrent requests during warm-up
-        semaphore = asyncio.Semaphore(5)
+        # Limit concurrent requests during warm-up 
+        batch_size = 4  # Chỉ xử lý 4 từ một lúc
+        semaphore = asyncio.Semaphore(3)  # Giới hạn đồng thời tối đa 3 yêu cầu
         
         async def warm_up_word(word):
             async with semaphore:
-                start = time.time()
-                result = await self.generate_response(word, use_cache=False)
-                end = time.time()
-                
-                # Evaluate word quality
-                if not result.startswith("Lỗi:"):
-                    quality_score, reason = await self.word_evaluator.evaluate_word(result)
-                    logger.info(f"Warm-up: '{word}' → '{result}' (Score: {quality_score:.2f}, Reason: {reason})")
-                    self.quality_scores[result] = quality_score
-                else:
-                    logger.warning(f"Warm-up error: '{word}' → '{result}'")
-                
-                return word, result, end - start
-        
-        tasks = [warm_up_word(word) for word in settings.WARM_UP_WORDS]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+                try:
+                    start = time.time()
+                    result = await self.generate_response(word, use_cache=False)
+                    end = time.time()
+                    
+                    # Evaluate word quality
+                    if not result.startswith("Lỗi:"):
+                        quality_score, reason = await self.word_evaluator.evaluate_word(result)
+                        logger.info(f"Warm-up: '{word}' → '{result}' (Score: {quality_score:.2f}, Reason: {reason})")
+                        self.quality_scores[result] = quality_score
+                    else:
+                        logger.warning(f"Warm-up error: '{word}' → '{result}'")
+                    
+                    return word, result, end - start
+                except Exception as e:
+                    logger.error(f"Error warming up word '{word}': {str(e)}")
+                    return word, f"Lỗi: {str(e)}", 0
         
         success_count = 0
         total_time = 0.0
-        for i, result in enumerate(results):
-            if isinstance(result, Tuple) and len(result) == 3:
-                word, response, response_time = result
-                if not response.startswith("Lỗi:"):
-                    self.word_cache[word] = response
-                    success_count += 1
-                    total_time += response_time
-            elif isinstance(result, Exception):
-                logger.error(f"Error during warm-up: {str(result)}")
+        
+        # Xử lý từng lô từ
+        for i in range(0, len(settings.WARM_UP_WORDS), batch_size):
+            batch = settings.WARM_UP_WORDS[i:i+batch_size]
+            logger.info(f"Đang xử lý lô {i//batch_size + 1}/{(len(settings.WARM_UP_WORDS) + batch_size - 1) // batch_size}")
+            
+            # Xử lý lô hiện tại
+            tasks = [warm_up_word(word) for word in batch]
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Xử lý kết quả
+            for result in batch_results:
+                if isinstance(result, tuple) and len(result) == 3:
+                    word, response, response_time = result
+                    if not response.startswith("Lỗi:"):
+                        self.word_cache[word] = response
+                        success_count += 1
+                        total_time += response_time
+            
+            # Chờ trước khi xử lý lô tiếp theo để tránh rate limiting
+            if i + batch_size < len(settings.WARM_UP_WORDS):
+                wait_time = 5  # Đợi 5 giây giữa các lô
+                logger.info(f"Hoàn thành lô {i//batch_size + 1}, đợi {wait_time}s trước lô tiếp theo...")
+                await asyncio.sleep(wait_time)
         
         # Calculate average response time
         if success_count > 0:
             self.average_response_time = total_time / success_count
         
         duration = time.time() - start_time
-        logger.info(f"Warm-up completed in {duration:.2f}s. {success_count}/{len(settings.WARM_UP_WORDS)} successful. Avg response time: {self.average_response_time:.3f}s")
+        logger.info(f"Warm-up hoàn thành trong {duration:.2f}s. {success_count}/{len(settings.WARM_UP_WORDS)} thành công. Thời gian phản hồi TB: {self.average_response_time:.3f}s")
+        
+        # Lưu các chủ đề nếu có
+        if hasattr(self.quality_tracker, 'theme_words_cache') and self.quality_tracker.theme_words_cache:
+            await self.quality_tracker.save_theme_words()
+        
         self.is_ready = True
 
-    async def generate_response(self, user_input: str, use_cache: bool = True, max_retries: int = None, quality_threshold: float = 0.6) -> str:
+    async def generate_response(self, user_input: str, use_cache: bool = True, max_retries: int = None, quality_threshold: float = 0.4) -> str:
         """Generate a response from Gemini API with retry logic and quality check"""
         if max_retries is None:
             max_retries = settings.MAX_RETRIES
@@ -410,18 +458,26 @@ class AIService:
         return await self.generate_response(prompt, use_cache=True)
     
     async def validate_vietnamese_word(self, word: str) -> Tuple[bool, str]:
-        """Check if a word is valid Vietnamese using word evaluator"""
-        # Use WordEvaluator for validation
-        score, reason = await self.word_evaluator.evaluate_word(word)
+        """Check if a word is valid Vietnamese using multiple methods"""
+        # 1. Kiểm tra trong từ điển trước (nhanh nhất)
+        if self.word_evaluator.is_in_dictionary(word):
+            return True, "Từ có trong từ điển"
         
-        # Consider words with score >= 0.5 as valid
-        is_valid = score >= 0.5
+        # 2. Kiểm tra cấu trúc cơ bản
+        from app.utils.validators import validate_word_structure
+        structure_valid, structure_reason = validate_word_structure(word)
         
-        if is_valid:
-            return True, "Từ hợp lệ"
+        if not structure_valid:
+            return False, structure_reason
+        
+        # 3. Sử dụng Gemini để kiểm tra nghĩa (chính xác nhất nhưng chậm hơn)
+        has_meaning, meaning_reason = await self.check_word_meaning(word)
+        if has_meaning:
+            await self.word_evaluator.add_to_dictionary(word)
+            return True, "Từ có nghĩa và đã được thêm vào từ điển"
         else:
-            return False, reason
-    
+            return False, meaning_reason
+                    
     async def suggest_words(self, starting_syllable: str) -> List[str]:
         """Suggest words starting with the given syllable"""
         if not starting_syllable:
@@ -481,3 +537,92 @@ class AIService:
         logger.info(f"Dictionary stats: {dictionary_stats}")
         
         return True
+    
+    async def check_word_meaning(self, word: str) -> Tuple[bool, str]:
+        """Check if a word has actual meaning in Vietnamese using Gemini"""
+        prompt = f"Từ '{word}' có phải là một từ có nghĩa trong tiếng Việt không? Chỉ trả lời 'có' hoặc 'không'."
+        
+        try:
+            result = await self.generate_response(prompt, use_cache=True)
+            is_valid = result.lower().startswith("có")
+            
+            reason = "Từ có nghĩa" if is_valid else "Từ không tồn tại hoặc không có nghĩa"
+            return is_valid, reason
+        except Exception as e:
+            logger.error(f"Error checking word meaning: {str(e)}")
+            return False, f"Lỗi kiểm tra nghĩa: {str(e)}"
+        
+async def get_theme_words(self, theme: str) -> List[str]:
+    """Lấy từ theo chủ đề từ bộ nhớ đệm hoặc tạo mới"""
+    if theme in self.quality_tracker.theme_words_cache:
+        # Lấy từ bộ nhớ đệm nếu có
+        logger.info(f"Sử dụng từ đã cache cho chủ đề '{theme}'")
+        return self.quality_tracker.theme_words_cache[theme]
+    
+    # Định nghĩa từ theo chủ đề
+    theme_mapping = {
+        "food": ["thức ăn", "món ăn", "bánh mì", "cơm gạo", "rau củ", "trái cây", 
+                "hoa quả", "thịt cá", "nước uống", "đồ ngọt", "bữa tiệc", 
+                "nhà hàng", "quán ăn", "bếp núc", "gia vị", "mì gói"],
+        "animals": ["con vật", "động vật", "con chó", "con mèo", "con cá", "con chim",
+                   "thú rừng", "thú cưng", "loài vật", "côn trùng", "gia súc",
+                   "chim muông", "thú hoang", "rắn rết", "cá tôm", "gấu bẹo"],
+        "nature": ["thiên nhiên", "núi non", "sông ngòi", "biển cả", "bầu trời",
+                  "mây mưa", "nắng gió", "rừng rậm", "cây cối", "hoa lá",
+                  "đồng cỏ", "bãi biển", "thác nước", "hang động", "sa mạc"],
+        "education": ["học tập", "trường học", "lớp học", "sinh viên", "học sinh",
+                     "giáo viên", "bài tập", "sách vở", "kiến thức", "trí tuệ",
+                     "đại học", "giảng đường", "thư viện", "khóa học", "môn học"],
+        "technology": ["công nghệ", "máy tính", "điện thoại", "mạng lưới", "thiết bị",
+                      "phần mềm", "thông tin", "dữ liệu", "kỹ thuật", "ứng dụng",
+                      "trí tuệ", "robot", "mạng xã", "máy móc", "khoa học"],
+        "sports": ["thể thao", "bóng đá", "bóng rổ", "cầu lông", "bơi lội",
+                  "võ thuật", "chạy bộ", "đạp xe", "thể dục", "sân vận",
+                  "vận động", "sức khỏe", "huấn luyện", "cầu thủ", "vận động"],
+        "family": ["gia đình", "cha mẹ", "con cái", "anh em", "chị em",
+                  "ông bà", "họ hàng", "tổ tiên", "tình thương", "hạnh phúc",
+                  "kỷ niệm", "tương lai", "mái ấm", "tình yêu", "thân thuộc"]
+    }
+    
+    words = []
+    
+    # Nếu có sẵn từ theo chủ đề
+    if theme in theme_mapping:
+        words = theme_mapping[theme]
+        logger.info(f"Sử dụng {len(words)} từ có sẵn cho chủ đề '{theme}'")
+    
+    # Nếu là chủ đề tùy chỉnh, sử dụng Gemini để gợi ý
+    elif theme != "random":
+        prompt = f"Hãy liệt kê 10 từ tiếng Việt gồm 2-3 âm tiết thuộc chủ đề '{theme}'. Mỗi từ phải có nghĩa cụ thể và thường gặp trong đời sống. Chỉ trả lời bằng các từ, mỗi từ một dòng."
+        
+        try:
+            result = await self.generate_response(prompt, use_cache=False)
+            
+            if not result.startswith("Lỗi:"):
+                words = [word.strip() for word in result.split('\n') if word.strip()]
+                logger.info(f"Tạo {len(words)} từ mới cho chủ đề '{theme}' từ Gemini")
+                
+                # Đánh giá chất lượng các từ nhận được
+                validated_words = []
+                for word in words:
+                    # Kiểm tra nếu từ có ít nhất 2 âm tiết
+                    if len(word.split()) >= 2:
+                        quality, _ = await self.word_evaluator.evaluate_word(word)
+                        if quality >= 0.4:  # Chỉ giữ lại từ có chất lượng tốt
+                            validated_words.append(word)
+                            # Lưu điểm chất lượng
+                            self.quality_scores[word] = quality
+                
+                words = validated_words
+        except Exception as e:
+            logger.error(f"Lỗi khi tạo từ cho chủ đề '{theme}': {str(e)}")
+            words = []
+    
+    # Nếu vẫn không có từ nào, trả về danh sách trống
+    if not words:
+        logger.warning(f"Không tìm thấy từ nào cho chủ đề '{theme}'")
+        return []
+    
+    # Lưu vào bộ nhớ đệm
+    self.quality_tracker.theme_words_cache[theme] = words
+    return words

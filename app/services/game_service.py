@@ -115,3 +115,48 @@ class GameService:
         if count > 0:
             logger.info(f"Cleaned up {count} old game sessions")
         return count
+    
+    def analyze_player_words(self, session_id: str = None) -> Dict:
+        """Analyze words used by players to improve dictionary"""
+        all_words = []
+        
+        if session_id:
+            # Analyze specific session
+            if session_id in self.used_words:
+                all_words = self.used_words[session_id]
+        else:
+            # Analyze all sessions
+            for words in self.used_words.values():
+                all_words.extend(words)
+        
+        # Count word frequencies
+        word_counts = {}
+        for word in all_words:
+            if word in word_counts:
+                word_counts[word] += 1
+            else:
+                word_counts[word] = 1
+        
+        # Sort by frequency
+        sorted_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)
+        
+        # Get syllable statistics
+        syllable_stats = {}
+        for word in all_words:
+            syllables = word.split()
+            for syllable in syllables:
+                if syllable in syllable_stats:
+                    syllable_stats[syllable] += 1
+                else:
+                    syllable_stats[syllable] = 1
+        
+        # Sort syllables by frequency
+        sorted_syllables = sorted(syllable_stats.items(), key=lambda x: x[1], reverse=True)
+        
+        return {
+            "total_words": len(all_words),
+            "unique_words": len(word_counts),
+            "top_words": sorted_words[:20],
+            "top_syllables": sorted_syllables[:20]
+        }
+

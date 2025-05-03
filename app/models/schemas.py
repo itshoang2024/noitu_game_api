@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class WordRequest(BaseModel):
     prompt: str = Field(..., description="The word provided by the user")
     session_id: Optional[str] = Field(None, description="Game session identifier")
+    theme: Optional[str] = Field(None, description="Theme for starting word (optional)")
 
 class WordResponse(BaseModel):
     answer: str = Field(..., description="The AI's response word")

@@ -24,22 +24,48 @@ class Settings(BaseSettings):
     REQUEST_TIMEOUT: float = 30.0
     MAX_RETRIES: int = 3
     
+    # Word validation settings
+    WORD_QUALITY_THRESHOLD: float = 0.5  # Ngưỡng chất lượng từ tối thiểu
+    USE_GEMINI_FOR_VALIDATION: bool = True  # Có sử dụng Gemini để kiểm tra từ không
+    MAX_VALIDATION_RETRIES: int = 3  # Số lần thử tối đa khi kiểm tra từ
+
     # Game settings
-    WARM_UP_WORDS: List[str] = [
-        "trường học", "căn nhà", "tủ lạnh", "xe đạp",
-        "bàn ghế", "mưa gió", "thành phố", "cây cối"
+    ENABLE_WARM_UP: bool = False  # Tắt trong môi trường phát triển
+
+    # Các bộ từ warm-up
+    WARM_UP_WORDS_HOUSEHOLD: List[str] = [
+        "bàn ghế", "ghế đẩu", "đẩu xe", "xe đạp", 
+        "đạp xe", "xe điện", "điện thoại", "thoại kịch",
+        "nhà cửa", "cửa sổ", "sổ sách", "sách vở"
     ]
 
-    # WARM_UP_WORDS: List[str] = [
-    #     "trường học", "căn nhà", "tủ lạnh", "xe đạp",
-    #     "bàn ghế", "mưa gió", "thành phố", "cây cối",
-    #     "máy tính", "bút chì", "sách vở", "điện thoại",
-    #     "bánh mì", "cà phê", "đèn pin", "bàn tay",
-    #     "áo khoác", "cửa sổ", "hoa hồng", "mặt trời",
-    #     "quả táo", "nước suối", "ngọn núi", "con mèo",
-    #     "cá vàng", "học sinh", "giáo viên", "bãi biển"
-    # ]
-    
+    WARM_UP_WORDS_EDUCATION: List[str] = [
+        "trường học", "học sinh", "sinh viên", "viên chức",
+        "lớp học", "học bài", "bài tập", "tập trung",
+        "giáo viên", "viên phấn", "phấn trắng", "trắng đen"
+    ]
+
+    WARM_UP_WORDS_NATURE: List[str] = [
+        "cây cối", "cối xay", "xay xát", "xát muối",
+        "mặt trời", "trời đất", "đất nước", "nước biển",
+        "rừng rậm", "rậm rạp", "hoa lá", "lá cây"
+    ]
+
+    WARM_UP_WORDS_FOOD: List[str] = [
+        "bánh mì", "mì gói", "gói ghém", "ghém gó",
+        "cơm gạo", "gạo nếp", "nếp sống", "sống chết",
+        "nước chấm", "chấm điểm", "điểm tâm", "tâm đầu"
+    ]
+
+    WARM_UP_WORDS_MIXED: List[str] = [
+        "tủ lạnh", "lạnh lẽo", "căn nhà", "nhà cửa", 
+        "thành phố", "phố xá", "mưa gió", "gió bão",
+        "áo khoác", "khoác lác", "quả táo", "táo bạo"
+    ]
+
+    # Bộ từ mặc định cho warm-up (sử dụng bộ đa dạng)
+    WARM_UP_WORDS: List[str] = WARM_UP_WORDS_MIXED
+
     # Gemini configuration
     GENERATION_CONFIG: dict = {
         "temperature": 0.2,
@@ -80,7 +106,19 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FILE: Optional[str] = "noitu_api.log"
-    
+    LOG_TO_CONSOLE: bool = True  
+    COLORED_LOGS: bool = True
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    MODULE_LOG_LEVELS: dict = {
+        "app.utils.word_evaluator": "WARNING",  
+        "httpx": "WARNING",
+        "asyncio": "WARNING",
+        "uvicorn": "WARNING",
+        "uvicorn.access": "WARNING"
+    }
+
+
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -1,7 +1,7 @@
-# import sys
-# import io
-# sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
-# sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
+import sys
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
 
 import uvicorn
 from fastapi import FastAPI
@@ -13,7 +13,6 @@ from app.config import settings
 from app.api.endpoints import router
 from app.services.ai_service import AIService
 from app.utils.logging import setup_logging
-
 
 # Set up logging
 logger = setup_logging()
@@ -56,9 +55,13 @@ async def startup_event():
     word_evaluator = WordEvaluator.get_instance()
     await word_evaluator.initialize()
     
-    # Run warm-up in the background
-    asyncio.create_task(ai_service.warm_up_model())
-
+    # Chỉ chạy warm-up nếu được bật trong cấu hình
+    if settings.ENABLE_WARM_UP:
+        logger.info("Bắt đầu warm-up model...")
+        asyncio.create_task(ai_service.warm_up_model())
+    else:
+        logger.info("Warm-up đã bị tắt trong cấu hình")
+        
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up resources when the server shuts down"""

@@ -51,4 +51,4 @@ node_modules/
 
 # Cache folders
 .cache/
-.data/
+data/

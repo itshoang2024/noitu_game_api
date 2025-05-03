@@ -49,7 +49,14 @@ COMMON_WORDS = [
     "đồng hồ", "hồ nước", "nước ngọt", "ngọt ngào", "ngào dữ",
     "áo quần", "quần áo", "áo khoác", "khoác lác", "lác đác",
     "bệnh viện", "viện trợ", "trợ lý", "lý do", "do dự",
-    "mặt trăng", "trăng sao", "sao chổi", "chổi quét", "quét dọn"
+    "mặt trăng", "trăng sao", "sao chổi", "chổi quét", "quét dọn",
+    "ghế đá", "đá quý", "quý báu", "báu vật", "vật chất",
+    "cây cảnh", "cảnh quan", "quan trọng", "trọng lượng", "lượng giá",
+    "hoa quả", "quả thực", "thực phẩm", "phẩm chất", "chất lượng",
+    "áo ấm", "ấm áp", "áp lực", "lực sĩ", "sĩ quan",
+    "bút bi", "bi kịch", "kịch tính", "tính toán", "toán học",
+    "trà đá", "đá banh", "banh hỏng", "hỏng hóc", "hóc búa",
+    "xe buýt", "buýt đỏ", "đỏ tươi", "tươi cười", "cười vui"
 ]
 
 # Vietnamese syllables to check against

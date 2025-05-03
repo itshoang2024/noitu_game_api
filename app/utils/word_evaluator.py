@@ -28,38 +28,54 @@ class WordEvaluator:
         self.common_words: Set[str] = set()
         self.word_scores: Dict[str, float] = {}
         self.is_initialized = False
-    
+        self.word_chains: Dict[str, List[str]] = {}  # syllable -> list of words that start with it
+
     async def initialize(self):
-        """Load dictionaries asynchronously"""
+        """Load dictionaries asynchronously with better error handling"""
         if self.is_initialized:
             return
-            
+                
         try:
             # Ensure the data directory exists
             os.makedirs(os.path.dirname(self.dictionary_path), exist_ok=True)
             
             # Load main dictionary if exists
+            loaded_dictionary = False
             if os.path.exists(self.dictionary_path):
-                async with aiofiles.open(self.dictionary_path, mode='r', encoding='utf-8') as f:
-                    content = await f.read()
-                    self.dictionary = {word.strip().lower() for word in content.split('\n') if word.strip()}
-                logger.info(f"Loaded {len(self.dictionary)} words from dictionary")
-            else:
-                # Create minimal dictionary if file doesn't exist
-                logger.warning(f"Dictionary file not found at {self.dictionary_path}, creating minimal dictionary")
+                try:
+                    with open(self.dictionary_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        self.dictionary = {word.strip().lower() for word in content.split('\n') if word.strip()}
+                    logger.info(f"Loaded {len(self.dictionary)} words from dictionary")
+                    loaded_dictionary = True
+                except Exception as e:
+                    logger.error(f"Error reading dictionary file: {str(e)}")
+                    
+            if not loaded_dictionary:
+                # Create minimal dictionary if file doesn't exist or couldn't be read
+                logger.warning(f"Dictionary file not found or invalid at {self.dictionary_path}, creating minimal dictionary")
                 self._create_minimal_dictionary()
-                
+                    
             # Load common words if exists
+            loaded_common_words = False
             if os.path.exists(self.common_words_path):
-                async with aiofiles.open(self.common_words_path, mode='r', encoding='utf-8') as f:
-                    content = await f.read()
-                    self.common_words = {word.strip().lower() for word in content.split('\n') if word.strip()}
-                logger.info(f"Loaded {len(self.common_words)} common words")
-            else:
-                # Create minimal common words list if file doesn't exist
-                logger.warning(f"Common words file not found at {self.common_words_path}, creating minimal list")
-                self._create_minimal_common_words()
+                try:
+                    with open(self.common_words_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        self.common_words = {word.strip().lower() for word in content.split('\n') if word.strip()}
+                    logger.info(f"Loaded {len(self.common_words)} common words")
+                    loaded_common_words = True
+                except Exception as e:
+                    logger.error(f"Error reading common words file: {str(e)}")
             
+            if not loaded_common_words:
+                # Create minimal common words list if file doesn't exist or couldn't be read
+                logger.warning(f"Common words file not found or invalid at {self.common_words_path}, creating minimal list")
+                self._create_minimal_common_words()
+                
+            # Build word chains
+            await self.build_word_chains()
+                
             self.is_initialized = True
                 
         except Exception as e:
@@ -68,7 +84,12 @@ class WordEvaluator:
             self._create_minimal_dictionary()
             self._create_minimal_common_words()
             self.is_initialized = True
-    
+            
+        # Always ensure the dictionary has at least some words
+        if len(self.dictionary) < 10:
+            logger.warning("Dictionary has too few words, adding minimal set")
+            self._create_minimal_dictionary()
+
     def _create_minimal_dictionary(self):
         """Create a minimal dictionary with common Vietnamese words"""
         base_words = [
@@ -147,13 +168,20 @@ class WordEvaluator:
         score = 0.0
         reasons = []
         
-        # Check if word exists in dictionary
+        # Check if word exists in dictionary - make this a bonus, not a requirement
         if self.is_in_dictionary(word):
-            score += 0.5
+            score += 0.4
             reasons.append("Từ tồn tại trong từ điển")
         else:
-            score += 0.1
-            reasons.append("Từ không có trong từ điển")
+            # Check basic Vietnamese word structure
+            from app.utils.validators import validate_word_structure
+            is_valid, _ = validate_word_structure(word)
+            if is_valid:
+                score += 0.3
+                reasons.append("Từ có cấu trúc tiếng Việt hợp lệ")
+            else:
+                score += 0.1
+                reasons.append("Từ không có trong từ điển")
         
         # Check if it's a common word
         if self.is_common_word(word):
@@ -163,17 +191,18 @@ class WordEvaluator:
         # Check length (2-3 syllables preferred)
         syllable_count = len(word.split())
         if syllable_count == 2:
-            score += 0.2
+            score += 0.3  # Increased weight for 2-syllable words
             reasons.append("Độ dài từ thích hợp (2 âm tiết)")
         elif syllable_count == 3:
-            score += 0.15
+            score += 0.2
             reasons.append("Độ dài từ thích hợp (3 âm tiết)")
         elif syllable_count > 3:
-            score += 0.05
+            score += 0.1
             reasons.append(f"Từ dài ({syllable_count} âm tiết)")
         else:
-            score += 0.0
-            reasons.append("Từ quá ngắn")
+            # Single syllable words are okay too
+            score += 0.2
+            reasons.append("Từ ngắn (1 âm tiết)")
         
         # Cap score at 1.0
         final_score = min(score, 1.0)
@@ -181,7 +210,7 @@ class WordEvaluator:
         # Cache the score
         self.word_scores[word] = final_score
         
-        return final_score, "; ".join(reasons)
+        return final_score, "; ".join(reasons)    
     
     def _get_score_reason(self, score: float) -> str:
         """Get a reason description based on score"""
@@ -201,3 +230,36 @@ class WordEvaluator:
         if not self.is_initialized:
             await self.initialize()
         return self.is_initialized
+    
+    async def build_word_chains(self):
+        """Build word chains for faster suggestion and validation"""
+        if not self.is_initialized:
+            await self.initialize()
+        
+        self.word_chains = {}
+        
+        # Process all words in dictionary
+        for word in self.dictionary:
+            syllables = word.split()
+            if len(syllables) >= 2:
+                first_syllable = syllables[0]
+                
+                # Add to chains
+                if first_syllable not in self.word_chains:
+                    self.word_chains[first_syllable] = []
+                    
+                self.word_chains[first_syllable].append(word)
+        
+        logger.info(f"Built word chains for {len(self.word_chains)} syllables")
+        
+        # Log some statistics
+        total_chain_words = sum(len(words) for words in self.word_chains.values())
+        avg_words_per_syllable = total_chain_words / len(self.word_chains) if self.word_chains else 0
+        
+        logger.info(f"Average words per syllable: {avg_words_per_syllable:.2f}")
+        
+        return len(self.word_chains)
+
+    def get_words_starting_with(self, syllable: str) -> List[str]:
+        """Get words that start with the given syllable"""
+        return self.word_chains.get(syllable.lower(), [])

@@ -6,15 +6,12 @@ def validate_vietnamese_syllable(syllable: str) -> bool:
     Verify if a string is likely a valid Vietnamese syllable
     This is a simplified check and not 100% accurate for all Vietnamese syllables
     """
-    # Remove diacritics for simplicity in this basic check
-    normalized = syllable.lower().strip()
+    # Chuẩn hóa đầu vào về dạng NFC
+    from unicodedata import normalize
+    normalized = normalize('NFC', syllable.lower().strip())
     
-    # Basic pattern for Vietnamese syllables
-    # This is simplified and doesn't catch all edge cases
-    pattern = r'^[a-zA-ZÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚĂĐĨŨƠàáâãèéêìíòóôõùúăđĩũơƯĂẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼỀỂưăạảấầẩẫậắằẳẵặẹẻẽềểỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪễếệỉịọỏốồổỗộớờởỡợụủứừỬỮỰỲỴÝỶỸửữựỳỵỷỹ]+$'
-    
-    # Check if it matches the pattern
-    return bool(re.match(pattern, normalized))
+    # Mẫu đơn giản hơn, chỉ loại bỏ các ký tự đặc biệt
+    return all(ord(c) < 128 or c in 'àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđ' for c in normalized)
 
 def extract_syllables(text: str) -> List[str]:
     """Extract syllables from a text string"""
