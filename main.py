@@ -56,11 +56,11 @@ async def startup_event():
     await word_evaluator.initialize()
     
     # Chỉ chạy warm-up nếu được bật trong cấu hình
-    if settings.ENABLE_WARM_UP:
-        logger.info("Bắt đầu warm-up model...")
-        asyncio.create_task(ai_service.warm_up_model())
-    else:
-        logger.info("Warm-up đã bị tắt trong cấu hình")
+    # if settings.ENABLE_WARM_UP:
+    logger.info("Bắt đầu warm-up model...")
+    asyncio.create_task(ai_service.warm_up_model())
+    # else:
+    #     logger.info("Warm-up đã bị tắt trong cấu hình")
         
 @app.on_event("shutdown")
 async def shutdown_event():
