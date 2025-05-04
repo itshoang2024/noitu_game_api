@@ -10,7 +10,7 @@ import asyncio
 import logging
 
 from app.config import settings
-from app.api.endpoints import router
+from app.api import router
 from app.services.ai_service import AIService
 from app.utils.logging import setup_logging
 
