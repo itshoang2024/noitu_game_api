@@ -11,15 +11,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Cài đặt các gói phụ thuộc
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y sqlite3 && rm -rf /var/lib/apt/lists/*
 
 # Sao chép mã nguồn vào container
 COPY . .
 
+# Tạo thư mục data và đảm bảo quyền ghi
+RUN mkdir -p /app/data && chmod 777 /app/data
+
 # Chạy script tạo từ điển khi build image
 RUN python -m scripts.create_dictionary
+
+# Thêm script khởi tạo database
+COPY scripts/init_database.sh /app/scripts/
+RUN chmod +x /app/scripts/init_database.sh
 
 # Mở cổng cho FastAPI
 EXPOSE 8800
 
 # Khởi động ứng dụng
-CMD ["python", "main.py"]
+CMD ["/bin/bash", "-c", "/app/scripts/init_database.sh && python main.py"]

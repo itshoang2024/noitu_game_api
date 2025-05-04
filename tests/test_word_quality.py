@@ -1,5 +1,3 @@
-# tests/test_word_quality.py
-import asyncio
 import pytest
 import sys
 import os

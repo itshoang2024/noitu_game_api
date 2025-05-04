@@ -15,7 +15,7 @@ router = APIRouter(prefix="/game", tags=["game"])
 @router.get("/start", response_model=SessionResponse)
 async def start_game(game_service: GameService = Depends(get_game_service)):
     """Bắt đầu một phiên chơi mới"""
-    session_id = game_service.create_session()
+    session_id = await game_service.create_session()
     return SessionResponse(session_id=session_id, status="success")
 
 @router.get("/stats/{session_id}")

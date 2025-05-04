@@ -9,7 +9,7 @@ services:
     ports:
       - "8800:8800"
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data  # Volume để lưu database
     env_file:
       - .env.prod
     restart: always

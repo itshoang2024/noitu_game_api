@@ -138,5 +138,425 @@
     "score": 0.6,
     "user_input": "biển cả",
     "session_id": "251f3026-0821-4b6f-94d1-352945e0ff13"
+  },
+  {
+    "timestamp": "2025-05-04T11:10:33.466842",
+    "word": "nước mắm",
+    "score": 0.7,
+    "user_input": "nhà nước",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:10:37.731748",
+    "word": "nhĩ mục",
+    "score": 0.7,
+    "user_input": "mắm nhĩ",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:10:41.936303",
+    "word": "lục giác",
+    "score": 0.6,
+    "user_input": "mục lục",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:10:46.789425",
+    "word": "quan trọng",
+    "score": 0.6,
+    "user_input": "giác quan",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:10:54.211539",
+    "word": "trách nhiệm",
+    "score": 0.6,
+    "user_input": "trọng trách",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:10:59.059007",
+    "word": "kỳ hạn",
+    "score": 0.6,
+    "user_input": "nhiệm kỳ",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:11:03.757120",
+    "word": "mức lương",
+    "score": 0.6,
+    "user_input": "hạn mức",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:11:11.340815",
+    "word": "bổng lộc",
+    "score": 0.6,
+    "user_input": "lương bổng",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:11:23.853338",
+    "word": "tài xế",
+    "score": 0.6,
+    "user_input": "lộc tài",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T11:11:29.054681",
+    "word": "chiều mưa",
+    "score": 0.6,
+    "user_input": "xế chiều",
+    "session_id": "bbc47183-296e-480b-aa69-bab37aeeeb90"
+  },
+  {
+    "timestamp": "2025-05-04T12:23:48.889558",
+    "word": "cục gạch",
+    "score": 0.6,
+    "user_input": "kỳ cục",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:23:55.082956",
+    "word": "men theo",
+    "score": 0.6,
+    "user_input": "gạch men",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:03.550010",
+    "word": "dõi theo",
+    "score": 0.6,
+    "user_input": "theo dõi",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:22.933348",
+    "word": "dấu chân",
+    "score": 0.6,
+    "user_input": "theo dấu",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:27.879884",
+    "word": "tay lái",
+    "score": 0.6,
+    "user_input": "chân tay",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:38.669206",
+    "word": "xe máy",
+    "score": 0.6,
+    "user_input": "lái xe",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:43.548369",
+    "word": "cày bừa",
+    "score": 0.6,
+    "user_input": "máy cày",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:48.531004",
+    "word": "bộn rộn",
+    "score": 0.6,
+    "user_input": "bừa bộn",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:49.001266",
+    "word": "bộn rộn",
+    "score": 0.6,
+    "user_input": "bừa bộn",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T12:24:53.062854",
+    "word": "ràng buộc",
+    "score": 0.6,
+    "user_input": "rộn ràng",
+    "session_id": "5fe9386c-d9b4-4a42-a7bd-233889107bcb"
+  },
+  {
+    "timestamp": "2025-05-04T14:11:48.670531",
+    "word": "cả nhà",
+    "score": 0.7,
+    "user_input": "biển cả",
+    "session_id": "4737befe-16fc-4fa6-8a14-71bca351045e"
+  },
+  {
+    "timestamp": "2025-05-04T14:11:56.386583",
+    "word": "lá chuối",
+    "score": 0.7,
+    "user_input": "nhà lá",
+    "session_id": "4737befe-16fc-4fa6-8a14-71bca351045e"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:15.753011",
+    "word": "heo rừng",
+    "score": 0.6,
+    "user_input": "óc heo",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:22.383533",
+    "word": "rậm rạp",
+    "score": 0.6,
+    "user_input": "rừng rậm",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:28.553289",
+    "word": "cưới hỏi",
+    "score": 0.6,
+    "user_input": "rạp cưới",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:32.844937",
+    "word": "hanh phúc",
+    "score": 0.6,
+    "user_input": "hỏi han",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:32.846164",
+    "word": "hanh phúc",
+    "score": 0.6,
+    "user_input": "hỏi han",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:42.343583",
+    "word": "trưởng phòng",
+    "score": 0.6,
+    "user_input": "viện trưởng",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:49.412139",
+    "word": "chống dịch",
+    "score": 0.6,
+    "user_input": "phòng chống",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:54.415308",
+    "word": "bệnh viện",
+    "score": 0.8999999999999999,
+    "user_input": "dịch bệnh",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:12:54.416245",
+    "word": "bệnh viện",
+    "score": 0.8999999999999999,
+    "user_input": "dịch bệnh",
+    "session_id": "fabc2ac5-0480-45e4-98e2-79d285e629be"
+  },
+  {
+    "timestamp": "2025-05-04T14:16:22.378749",
+    "word": "tranh vẽ",
+    "score": 0.6,
+    "user_input": "đấu tranh",
+    "session_id": "e141a28e-269a-4446-bba5-e98189617cee"
+  },
+  {
+    "timestamp": "2025-05-04T14:16:35.642246",
+    "word": "sách vở",
+    "score": 0.7,
+    "user_input": "sổ sách",
+    "session_id": "49236695-50a2-46dc-b608-7f1d06a8f473"
+  },
+  {
+    "timestamp": "2025-05-04T14:16:44.888902",
+    "word": "ghi chú",
+    "score": 0.6,
+    "user_input": "vở ghi",
+    "session_id": "49236695-50a2-46dc-b608-7f1d06a8f473"
+  },
+  {
+    "timestamp": "2025-05-04T14:16:50.440954",
+    "word": "thích thú",
+    "score": 0.6,
+    "user_input": "chú thích",
+    "session_id": "49236695-50a2-46dc-b608-7f1d06a8f473"
+  },
+  {
+    "timestamp": "2025-05-04T14:16:54.720907",
+    "word": "vui chơi",
+    "score": 0.6,
+    "user_input": "thú vui",
+    "session_id": "49236695-50a2-46dc-b608-7f1d06a8f473"
+  },
+  {
+    "timestamp": "2025-05-04T14:16:59.415317",
+    "word": "đùa giỡn",
+    "score": 0.6,
+    "user_input": "chơi đùa",
+    "session_id": "49236695-50a2-46dc-b608-7f1d06a8f473"
+  },
+  {
+    "timestamp": "2025-05-04T14:17:13.521442",
+    "word": "trưởng phòng",
+    "score": 0.7,
+    "user_input": "viện trưởng",
+    "session_id": "612542e0-1029-4ce5-bee1-eae77f0da794"
+  },
+  {
+    "timestamp": "2025-05-04T14:17:18.690332",
+    "word": "chống dịch",
+    "score": 0.7,
+    "user_input": "phòng chống",
+    "session_id": "612542e0-1029-4ce5-bee1-eae77f0da794"
+  },
+  {
+    "timestamp": "2025-05-04T14:17:22.483008",
+    "word": "bệnh viện",
+    "score": 0.8999999999999999,
+    "user_input": "dịch bệnh",
+    "session_id": "612542e0-1029-4ce5-bee1-eae77f0da794"
+  },
+  {
+    "timestamp": "2025-05-04T14:17:22.483008",
+    "word": "bệnh viện",
+    "score": 0.8999999999999999,
+    "user_input": "dịch bệnh",
+    "session_id": "612542e0-1029-4ce5-bee1-eae77f0da794"
+  },
+  {
+    "timestamp": "2025-05-04T14:19:50.123824",
+    "word": "sao biển",
+    "score": 0.7,
+    "user_input": "sát sao",
+    "session_id": "eedfbb03-ade9-4c98-93ad-d0e83859a431"
+  },
+  {
+    "timestamp": "2025-05-04T14:19:54.339568",
+    "word": "cả nhà",
+    "score": 0.7,
+    "user_input": "biển cả",
+    "session_id": "eedfbb03-ade9-4c98-93ad-d0e83859a431"
+  },
+  {
+    "timestamp": "2025-05-04T14:19:57.247450",
+    "word": "nước mắm",
+    "score": 0.7,
+    "user_input": "nhà nước",
+    "session_id": "eedfbb03-ade9-4c98-93ad-d0e83859a431"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:00.828471",
+    "word": "tôm khô",
+    "score": 0.6,
+    "user_input": "mắm tôm",
+    "session_id": "eedfbb03-ade9-4c98-93ad-d0e83859a431"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:12.858399",
+    "word": "đá bóng",
+    "score": 0.6,
+    "user_input": "ghế đá",
+    "session_id": "1029e733-35eb-4ca2-a6d1-1f35ee891d3d"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:18.607520",
+    "word": "bàn tay",
+    "score": 0.6,
+    "user_input": "bóng bàn",
+    "session_id": "1029e733-35eb-4ca2-a6d1-1f35ee891d3d"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:32.589396",
+    "word": "chân dung",
+    "score": 0.6,
+    "user_input": "dấu chân",
+    "session_id": "6029c789-2503-4d46-a1b7-2b07b9590c42"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:36.698361",
+    "word": "mạo hiểm",
+    "score": 0.6,
+    "user_input": "dung mạo",
+    "session_id": "6029c789-2503-4d46-a1b7-2b07b9590c42"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:42.074557",
+    "word": "họa sĩ",
+    "score": 0.6,
+    "user_input": "hiểm họa",
+    "session_id": "6029c789-2503-4d46-a1b7-2b07b9590c42"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:52.226204",
+    "word": "diện tích",
+    "score": 0.6,
+    "user_input": "sĩ diện",
+    "session_id": "6029c789-2503-4d46-a1b7-2b07b9590c42"
+  },
+  {
+    "timestamp": "2025-05-04T14:20:57.412759",
+    "word": "đức tính",
+    "score": 0.6,
+    "user_input": "tích đức",
+    "session_id": "6029c789-2503-4d46-a1b7-2b07b9590c42"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:04.358923",
+    "word": "cách mạng",
+    "score": 0.6,
+    "user_input": "tính cách",
+    "session_id": "6029c789-2503-4d46-a1b7-2b07b9590c42"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:18.013022",
+    "word": "sổ sách",
+    "score": 0.7,
+    "user_input": "cửa sổ",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:22.524011",
+    "word": "vở bài",
+    "score": 0.6,
+    "user_input": "sách vở",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:23.341715",
+    "word": "vở bài",
+    "score": 0.6,
+    "user_input": "sách vở",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:26.854717",
+    "word": "tập vở",
+    "score": 0.6,
+    "user_input": "bài tập",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:27.705526",
+    "word": "tập vở",
+    "score": 0.6,
+    "user_input": "bài tập",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
+  },
+  {
+    "timestamp": "2025-05-04T14:21:45.585616",
+    "word": "tập trung",
+    "score": 0.7,
+    "user_input": "vở tập",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
+  },
+  {
+    "timestamp": "2025-05-04T14:22:00.745023",
+    "word": "tâm lý",
+    "score": 0.6,
+    "user_input": "trung tâm",
+    "session_id": "b7d9bba3-6d97-408b-ae8f-33c98630c8e6"
   }
 ]

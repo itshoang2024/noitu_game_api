@@ -1,20 +1,13 @@
-import sys
-import io
-sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
-
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
-import logging
 
 from app.config import settings
 from app.api import router
 from app.services.ai_service import AIService
+from app.database.base import engine, Base
 from app.utils.logging import setup_logging
-
-# Set up logging
 logger = setup_logging()
 
 # Create FastAPI application
@@ -36,13 +29,15 @@ app.add_middleware(
 # Include API router
 app.include_router(router)
 
-# Cập nhật trong main.py
-
 # Initialize AI service during startup
 @app.on_event("startup")
 async def startup_event():
     """Initialize services when the server starts"""
     logger.info(f"Khởi động API nối từ với model {settings.MODEL_ID}")
+    
+    # Create database tables if they don't exist
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables created or verified")
     
     ai_service = AIService.get_instance()
     
@@ -55,12 +50,9 @@ async def startup_event():
     word_evaluator = WordEvaluator.get_instance()
     await word_evaluator.initialize()
     
-    # Chỉ chạy warm-up nếu được bật trong cấu hình
-    # if settings.ENABLE_WARM_UP:
+    # Warm-up model if enabled
     logger.info("Bắt đầu warm-up model...")
     asyncio.create_task(ai_service.warm_up_model())
-    # else:
-    #     logger.info("Warm-up đã bị tắt trong cấu hình")
         
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -70,10 +62,7 @@ async def shutdown_event():
     await ai_service.close()
 
 if __name__ == "__main__":
-    # Check API key before starting
     if not settings.GEMINI_API_KEY:
         logger.error("ERROR: GEMINI_API_KEY is not set. Exiting.")
     else:
-        # Run with reload=True for development, False in production
         uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=settings.DEBUG)
-        # uvicorn.run("main:app", host="0.0.0.0", port=settings.PORT, reload=False)

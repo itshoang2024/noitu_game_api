@@ -22,7 +22,7 @@ async def _validate_input_word(word: str, session_id: str, game_service: GameSer
         raise HTTPException(status_code=400, detail="Vui lòng nhập một từ để nối.")
     
     # Check if word has been used before in this session
-    if game_service.is_word_used(session_id, word):
+    if await game_service.is_word_used(session_id, word):
         raise HTTPException(
             status_code=400, 
             detail="Từ này đã được sử dụng, vui lòng chọn một từ khác"
@@ -45,7 +45,7 @@ async def _generate_quality_response(
     ai_service: AIService,
     game_service: GameService,
     background_tasks: BackgroundTasks,
-    max_retry: int = 3,
+    max_retry: int = settings.MAX_RETRIES,
     quality_threshold: float = 0.4
 ) -> WordResponse:
     """Generate high-quality response with retry logic"""
@@ -56,12 +56,13 @@ async def _generate_quality_response(
 
     while attempts < max_retry:
         try:
-            # Generate high-quality response
+            # Generate high-quality response với session_id và game_service
             reply, score = await ai_service.generate_high_quality_response(
                 user_input, 
+                session_id=session_id,
+                game_service=game_service,
                 max_attempts=2,
-                quality_threshold=quality_threshold,
-                session_id=session_id
+                quality_threshold=quality_threshold
             )
             
             logger.info(f"Attempt {attempts+1}/{max_retry}: Generated '{reply}' with quality score {score:.2f}")
@@ -79,7 +80,7 @@ async def _generate_quality_response(
                 continue
 
             # Check if word was used in this session
-            if game_service.is_word_used(session_id, reply):
+            if await game_service.is_word_used(session_id, reply):
                 logger.info(f"Từ '{reply}' đã được dùng, thử lại...")
                 attempts += 1
                 continue
@@ -118,7 +119,7 @@ async def _generate_quality_response(
             attempts += 1
 
     # If we still don't have a valid response after all attempts
-    if not reply or game_service.is_word_used(session_id, reply):
+    if not reply or await game_service.is_word_used(session_id, reply):
         # Use best reply if we have one with at least some quality
         if best_reply and best_score > 0.2:
             reply = best_reply
@@ -139,7 +140,7 @@ async def _generate_quality_response(
         )
 
     # Register the AI's word in the used words
-    game_service.register_word(session_id, reply)
+    await game_service.register_word(session_id, reply)
     
     # Add to word evaluator dictionary in background
     word_evaluator = ai_service.word_evaluator

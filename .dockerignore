@@ -12,7 +12,10 @@ ENV/
 *.log
 .git/
 .gitignore
-Dockerfile
-docker-compose.yml
 README.md
 tests/
+
+# Không loại trừ các file này nữa
+# Dockerfile
+# docker-compose.yml
+# data/

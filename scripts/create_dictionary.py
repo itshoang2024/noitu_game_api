@@ -4,6 +4,10 @@ import aiofiles
 import aiohttp
 import logging
 
+from app.database.base import engine, Base, SessionLocal
+from app.database import crud, models
+from sqlalchemy.orm import Session
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -128,20 +132,120 @@ async def fetch_additional_vietnamese_words():
         logger.error(f"Error fetching additional words: {str(e)}")
         return []
 
+async def generate_dictionary_in_database():
+    """Tạo từ điển trong database"""
+    # Đảm bảo các bảng đã được tạo
+    Base.metadata.create_all(bind=engine)
+    
+    # Tạo session
+    db = SessionLocal()
+    
+    try:
+        # Kiểm tra nếu database đã có dữ liệu
+        word_count = db.query(models.Word).count()
+        if word_count > 0:
+            logger.info(f"Database already contains {word_count} words, skipping initialization")
+            return {"existing_words": word_count}
+        
+        # Tạo các chủ đề mặc định
+        themes = {
+            "random": "Ngẫu nhiên",
+            "food": "Ẩm thực",
+            "animals": "Động vật",
+            "nature": "Thiên nhiên",
+            "education": "Giáo dục",
+            "technology": "Công nghệ",
+            "sports": "Thể thao",
+            "family": "Gia đình"
+        }
+        
+        theme_objects = {}
+        for theme_id, theme_name in themes.items():
+            theme = models.Theme(
+                name=theme_id,
+                description=theme_name,
+                is_default=(theme_id == "random")
+            )
+            db.add(theme)
+            db.flush()
+            theme_objects[theme_id] = theme
+            
+        logger.info(f"Created {len(themes)} default themes")
+        
+        # Thêm các từ theo mảng
+        words_added = 0
+        common_words_added = 0
+        
+        # Thêm các từ phổ biến
+        for word in COMMON_WORD_PAIRS:
+            syllables = word.split()
+            word_obj = models.Word(
+                word=word,
+                quality_score=0.7,  # Điểm chất lượng cao cho từ mặc định
+                is_common=True,
+                syllable_count=len(syllables),
+                first_syllable=syllables[0] if syllables else "",
+                last_syllable=syllables[-1] if syllables else ""
+            )
+            db.add(word_obj)
+            words_added += 1
+            common_words_added += 1
+            
+            # Thêm vào chủ đề phù hợp
+            if any(food_word in word for food_word in ["ăn", "uống", "bánh", "cơm", "gạo", "mì"]):
+                db.add(models.ThemeWord(theme_id=theme_objects["food"].id, word_id=word_obj.id))
+            
+            if any(animal_word in word for animal_word in ["con", "mèo", "chó", "cá", "vàng"]):
+                db.add(models.ThemeWord(theme_id=theme_objects["animals"].id, word_id=word_obj.id))
+            
+            if any(nature_word in word for nature_word in ["trời", "đất", "nước", "biển", "cây", "cối"]):
+                db.add(models.ThemeWord(theme_id=theme_objects["nature"].id, word_id=word_obj.id))
+            
+            if any(edu_word in word for edu_word in ["học", "trường", "sinh", "viên", "giáo", "sách"]):
+                db.add(models.ThemeWord(theme_id=theme_objects["education"].id, word_id=word_obj.id))
+        
+        # Thêm các từ phổ biến khác
+        for word in COMMON_WORDS:
+            syllables = word.split()
+            word_obj = models.Word(
+                word=word,
+                quality_score=0.6,
+                is_common=False,  # Không đánh dấu là common để giảm số lượng
+                syllable_count=len(syllables),
+                first_syllable=syllables[0] if syllables else "",
+                last_syllable=syllables[-1] if syllables else ""
+            )
+            db.add(word_obj)
+            words_added += 1
+            
+        # Commit các thay đổi
+        db.commit()
+        logger.info(f"Added {words_added} words to database, including {common_words_added} common words")
+        
+        return {
+            "words_added": words_added,
+            "common_words_added": common_words_added,
+            "themes_created": len(themes)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error generating dictionary in database: {str(e)}")
+        raise
+    finally:
+        db.close()
+
 async def main():
-    """Main function to generate dictionary files"""
+    """Main function to generate dictionary"""
     logger.info("Starting dictionary generation...")
     
-    # First generate basic dictionary
-    stats = await generate_dictionary_files()
+    # Tạo từ điển trong database
+    stats_db = await generate_dictionary_in_database()
+    logger.info(f"Database dictionary generation complete. Stats: {stats_db}")
     
-    logger.info(f"Dictionary generation complete. Stats: {stats}")
-    
-    # Optionally attempt to fetch additional words
-    # additional_words = await fetch_additional_vietnamese_words()
-    # if additional_words:
-    #     # Update dictionary with additional words
-    #     pass
+    # Vẫn giữ lại code tạo file để tương thích ngược
+    stats_file = await generate_dictionary_files()
+    logger.info(f"File dictionary generation complete. Stats: {stats_file}")
 
 if __name__ == "__main__":
     asyncio.run(main())

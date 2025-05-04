@@ -10,3 +10,6 @@ pytest-asyncio
 colorama
 aiohttp
 gunicorn
+sqlalchemy
+alembic
+aiosqlite

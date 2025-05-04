@@ -1,39 +1,58 @@
 noitu_game_api/
 │   .env                    # Biến môi trường (chỉ local, không commit)
 │   .env.example            # Mẫu biến môi trường
-│   .gitignore              # Các file bị loại khỏi git
-│   Dockerfile              # Cấu hình Docker cho môi trường phát triển
-│   Dockerfile.prod         # Cấu hình Docker cho môi trường production
-│   docker-compose.yml      # Cấu hình Docker Compose cho phát triển
-│   docker-compose.prod.yml # Cấu hình Docker Compose cho production
-│   main.py                 # Điểm khởi đầu ứng dụng
-│   README.md               # Hướng dẫn sử dụng
-│   requirements.txt        # Các thư viện cần thiết
+│   .gitignore              # Các file bị loại khỏi git (cập nhật để loại trừ *.db)
+│   Dockerfile              # Cấu hình Docker cho môi trường phát triển (đã cập nhật)
+│   Dockerfile.prod         # Cấu hình Docker cho môi trường production (đã cập nhật)
+│   docker-compose.yml      # Cấu hình Docker Compose cho phát triển (đã cập nhật)
+│   docker-compose.prod.yml # Cấu hình Docker Compose cho production (đã cập nhật)
+│   main.py                 # Điểm khởi đầu ứng dụng (đã cập nhật để khởi tạo database)
+│   README.md               # Hướng dẫn sử dụng (cập nhật với hướng dẫn database)
+│   requirements.txt        # Các thư viện cần thiết (cập nhật thêm sqlalchemy, alembic, aiosqlite)
 │   __init__.py             # Khởi tạo package
 │
+├───alembic/                # Thư mục quản lý migration database (MỚI)
+│   │   alembic.ini         # File cấu hình alembic
+│   │   env.py              # Environment migration
+│   │   README             
+│   │   script.py.mako      # Template cho migration
+│   │
+│   └───versions/           # Phiên bản migrations
+│           __init__.py
+│           001_create_initial_tables.py  # Migration tạo bảng ban đầu
+│
 ├───app/                    # Thư mục chính của ứng dụng
-│   │   config.py           # Cấu hình ứng dụng
+│   │   config.py           # Cấu hình ứng dụng (đã cập nhật thêm cấu hình database)
 │   │   __init__.py         # Khởi tạo package
 │   │
-│   ├───api/                # API endpoints và middleware
+│   ├───api/                
 │   │   │   __init__.py     # Kết hợp tất cả routers
+│   │   │   dependencies.py # Dependency injection cho database (MỚI)
 │   │   │   middleware.py   # Middleware xử lý request/response
 │   │   │
-│   │   └───routes/         # Thư mục chứa các routers tách biệt
+│   │   └───routes/         
 │   │       │   __init__.py # Export tất cả routers
 │   │       │   core.py     # Router chính (/ask endpoint)
 │   │       │   game.py     # Router quản lý game
 │   │       │   word.py     # Router quản lý từ
 │   │       │   dictionary.py # Router quản lý từ điển  
-│   │       └───system.py   # Router quản lý hệ thống
+│   │       │   system.py   # Router quản lý hệ thống
+│   │       └───database.py # Router quản lý database (MỚI)
+│   │
+│   ├───database/           # Module database (MỚI)
+│   │   │   __init__.py     # Export các module
+│   │   │   base.py         # Cấu hình kết nối database
+│   │   │   models.py       # Định nghĩa SQLAlchemy models
+│   │   │   crud.py         # Các hàm CRUD
+│   │   └───migrations.py   # Hàm hỗ trợ migration (tùy chọn)
 │   │
 │   ├───models/             # Định nghĩa các models
 │   │       schemas.py      # Pydantic schemas
 │   │       __init__.py     # Khởi tạo package
 │   │
 │   ├───services/           # Các dịch vụ xử lý logic
-│   │       ai_service.py   # Tương tác với Gemini API
-│   │       game_service.py # Xử lý logic trò chơi
+│   │       ai_service.py   # Tương tác với Gemini API (đã cập nhật với database)
+│   │       game_service.py # Xử lý logic trò chơi (đã cập nhật với database)
 │   │       service_init.py # Khởi tạo các services
 │   │       __init__.py     # Khởi tạo package
 │   │
@@ -41,19 +60,23 @@ noitu_game_api/
 │           constants.py    # Các hằng số
 │           logging.py      # Cấu hình logging
 │           validators.py   # Xác thực từ
-│           word_evaluator.py # Đánh giá chất lượng từ
+│           word_evaluator.py # Đánh giá chất lượng từ (đã cập nhật với database)
 │           __init__.py     # Khởi tạo package
 │
 ├───data/                   # Thư mục chứa dữ liệu
-│       common_words.txt    # Danh sách từ phổ biến
-│       quality_metrics.json # Số liệu về chất lượng từ
-│       theme_words.json    # Từ được phân loại theo chủ đề
-│       vietnamese_dictionary.txt # Từ điển tiếng Việt
+│       common_words.txt    # Danh sách từ phổ biến (giữ lại cho tương thích ngược)
+│       quality_metrics.json # Số liệu về chất lượng từ (giữ lại cho tương thích ngược)
+│       theme_words.json    # Từ được phân loại theo chủ đề (giữ lại cho tương thích ngược)
+│       vietnamese_dictionary.txt # Từ điển tiếng Việt (giữ lại cho tương thích ngược)
+│       noitu_game.db       # File database SQLite (MỚI, không đưa vào git)
 │
 ├───scripts/                # Scripts tiện ích
-│       create_dictionary.py # Tạo từ điển
+│       create_dictionary.py # Tạo từ điển (đã cập nhật để hỗ trợ database)
+│       init_database.sh    # Script khởi tạo database cho Docker (MỚI)
+│       migrate_data.py     # Script di chuyển dữ liệu từ file sang database (MỚI)
 │       __init__.py         # Khởi tạo package
 │
 └───tests/                  # Tests
         test_word_quality.py # Kiểm tra chất lượng từ
+        test_database.py    # Kiểm tra kết nối database (MỚI)
         __init__.py         # Khởi tạo package

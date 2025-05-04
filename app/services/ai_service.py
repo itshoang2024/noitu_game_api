@@ -1,20 +1,21 @@
 import asyncio
 import time
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 import httpx
 from asyncio import Semaphore
-
-from app.config import settings
-from app.utils.word_evaluator import WordEvaluator
-
-logger = logging.getLogger(__name__)
 
 from datetime import datetime
 import json
 import os
 
+from app.config import settings
+from app.utils.word_evaluator import WordEvaluator
 from app.utils.constants import QUALITY_METRICS_PATH
+from app.database.base import get_db, get_async_db
+from app.database import crud
+
+logger = logging.getLogger(__name__)
 
 class QualityTracker:
     """Tracks word quality metrics over time"""
@@ -180,11 +181,22 @@ class AIService:
     async def warm_up_model(self):
         """Warm up the model with predefined words"""
         logger.info("Starting model warm-up...")
-        await self.initialize()  # Ensure word evaluator is initialized
+
+        # Đảm bảo word evaluator đã được khởi tạo đúng cách
+        await self.initialize()
+
+        # Kiểm tra thêm một lần nữa
+        word_evaluator = self.word_evaluator
+        if not word_evaluator.is_initialized:
+            logger.error("WordEvaluator initialization failed, forcing initialization")
+            word_evaluator.is_initialized = True
+            # Đảm bảo xây dựng word chains
+            await word_evaluator.build_word_chains()
+
         start_time = time.time()
         
         # Limit concurrent requests during warm-up 
-        batch_size = 6  # Chỉ xử lý 4 từ một lúc
+        batch_size = 4  # Chỉ xử lý 4 từ một lúc
         semaphore = asyncio.Semaphore(3)  # Giới hạn đồng thời tối đa 3 yêu cầu
         
         async def warm_up_word(word):
@@ -247,11 +259,12 @@ class AIService:
         
         self.is_ready = True
 
-    async def generate_response(self, user_input: str, use_cache: bool = True, max_retries: int = None, quality_threshold: float = 0.4, skip_quality_check: bool = False) -> str:
+    async def generate_response(self, user_input: str, used_words: List[str] = None, 
+                            session_id: str = None, game_service = None,
+                            use_cache: bool = True, max_retries: int = settings.MAX_RETRIES, 
+                            quality_threshold: float = 0.4, 
+                            skip_quality_check: bool = False) -> str:
         """Generate a response from Gemini API with retry logic and quality check"""
-        if max_retries is None:
-            max_retries = settings.MAX_RETRIES
-            
         # Check cache first
         if use_cache and user_input in self.word_cache:
             logger.debug(f"Cache hit for: '{user_input}'")
@@ -260,8 +273,30 @@ class AIService:
         logger.debug(f"Cache miss for: '{user_input}'. Calling Gemini API...")
         self.total_requests += 1
         
-        # Prepare prompt for Gemini
-        prompt_text = f"{settings.SYSTEM_INSTRUCTION}\nNgười dùng: {user_input}\n→"
+        base_prompt = settings.SYSTEM_INSTRUCTION
+        
+        if session_id and game_service and user_input:
+            # Lấy âm tiết cuối của từ người dùng nhập
+            user_syllables = user_input.strip().lower().split()
+            if len(user_syllables) > 0:
+                last_syllable = user_syllables[-1]
+                
+                # Lọc các từ đã dùng bắt đầu bằng âm tiết cuối
+                conflicting_words = []
+                all_used_words = game_service.used_words.get(session_id, [])
+                
+                for word in all_used_words:
+                    word_syllables = word.strip().lower().split()
+                    if word_syllables and word_syllables[0] == last_syllable:
+                        conflicting_words.append(word)
+                
+                # Thêm vào prompt nếu có từ xung đột
+                if conflicting_words:
+                    conflicting_words_text = ", ".join(conflicting_words)
+                    base_prompt += f"\n\nCác từ đã sử dụng bắt đầu bằng '{last_syllable}' (không được dùng lại): {conflicting_words_text}."
+                    logger.debug(f"Added {len(conflicting_words)} conflicting words to prompt for syllable '{last_syllable}'")
+        
+        prompt_text = f"{base_prompt}\nNgười dùng: {user_input}\n→"
         
         # Prepare API payload
         payload = {
@@ -388,11 +423,16 @@ class AIService:
                     logger.error(f"Unexpected error: {str(e)}", exc_info=True)
                     self.failed_requests += 1
                     return f"Lỗi: Lỗi máy chủ nội bộ khi xử lý yêu cầu ({type(e).__name__})."
-    
-    async def generate_high_quality_response(self, user_input: str, max_attempts: int = 3, quality_threshold: float = 0.7, session_id: str = None) -> Tuple[str, float]:
+
+    async def generate_high_quality_response(
+        self, user_input: str, session_id: str = None, 
+        game_service = None, max_attempts: int = settings.MAX_RETRIES, 
+        quality_threshold: float = 0.7
+    ) -> Tuple[str, float]:
         """Generate a high-quality response with multiple attempts if needed"""
         best_response = None
         best_score = 0.0
+        start_time = time.time()
         
         for attempt in range(max_attempts):
             response = await self.generate_response(user_input, use_cache=(attempt == 0))
@@ -416,14 +456,30 @@ class AIService:
                     logger.info(f"Found high-quality response on attempt {attempt+1}")
                     break
         
-        # If all attempts failed, return best response or error
-        if best_response is None:
-            return "Lỗi: Không thể tạo từ chất lượng cao.", 0.0
+        # Tính toán thời gian phản hồi
+        response_time_ms = int((time.time() - start_time) * 1000)
         
-        # Track quality metrics
-        self.quality_tracker.add_metric(best_response, best_score, user_input, session_id)
+        # Lưu metrics vào database
+        if settings.USE_DATABASE and best_response:
+            try:
+                async for db in get_async_db():
+                    await crud.add_ai_metric(
+                        db, 
+                        request_word=user_input,
+                        response_word=best_response,
+                        quality_score=best_score,
+                        response_time_ms=response_time_ms,
+                        game_id=session_id,
+                        success=(best_response is not None and not best_response.startswith("Lỗi:"))
+                    )
+            except Exception as e:
+                logger.error(f"Error logging AI metrics to database: {str(e)}")
+        
+        # Vẫn duy trì việc track quality metrics trong memory
+        if best_response is not None:
+            self.quality_tracker.add_metric(best_response, best_score, user_input, session_id)
                 
-        return best_response, best_score
+        return best_response or "Lỗi: Không thể tạo từ chất lượng cao.", best_score
     
     def get_cached_words(self) -> int:
         """Get the number of cached words"""
@@ -478,14 +534,24 @@ class AIService:
         if not structure_valid:
             return False, structure_reason
         
-        # 3. Sử dụng Gemini để kiểm tra nghĩa (chính xác nhất nhưng chậm hơn)
+        # Bổ sung: Kiểm tra xem từ đã được lưu quality score chưa
+        if word in self.quality_scores and self.quality_scores[word] >= 0.5:
+            # Thêm vào từ điển luôn
+            await self.word_evaluator.add_to_dictionary(word)
+            return True, "Từ có chất lượng cao được đánh giá trước đó"
+        
+        # 3. Sử dụng Gemini để kiểm tra nghĩa
         has_meaning, meaning_reason = await self.check_word_meaning(word)
         if has_meaning:
-            await self.word_evaluator.add_to_dictionary(word)
+            # Try-except để tránh lỗi duplicate
+            try:
+                await self.word_evaluator.add_to_dictionary(word)
+            except Exception as e:
+                logger.warning(f"Không thể thêm từ '{word}' vào từ điển: {str(e)}")
             return True, "Từ có nghĩa và đã được thêm vào từ điển"
         else:
-            return False, meaning_reason
-                    
+            return False, meaning_reason             
+               
     async def suggest_words(self, starting_syllable: str) -> List[str]:
         """Suggest words starting with the given syllable"""
         if not starting_syllable:

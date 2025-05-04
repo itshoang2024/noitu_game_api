@@ -1,4 +1,3 @@
-import re
 from typing import Tuple, List
 
 def validate_vietnamese_syllable(syllable: str) -> bool:

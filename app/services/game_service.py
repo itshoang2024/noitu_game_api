@@ -2,8 +2,12 @@ import time
 import logging
 from typing import Dict, List, Tuple, Optional
 import uuid
+import asyncio
 
 from app.services.ai_service import AIService
+from app.database.base import get_db, get_async_db
+from app.database import crud
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -24,28 +28,53 @@ class GameService:
         self.used_words: Dict[str, List[str]] = {}  # Map session_id to list of used words
         self.game_stats: Dict[str, Dict] = {}  # Store game statistics
     
-    def create_session(self) -> str:
-        """Create a new game session"""
+    async def create_session(self) -> str:
+        """Create a new game session with database support"""
         session_id = str(uuid.uuid4())
+        
+        if settings.USE_DATABASE:
+            try:
+                async for db in get_async_db():
+                    await crud.create_game(db, session_id)
+            except Exception as e:
+                logger.error(f"Error creating game session in database: {str(e)}")
+        
+        # Vẫn duy trì cache trên memory để xử lý nhanh
         self.used_words[session_id] = []
         self.game_stats[session_id] = {
             "start_time": time.time(),
             "words_count": 0,
             "last_activity": time.time()
         }
+        
         logger.info(f"New game session created: {session_id}")
         return session_id
     
-    def register_word(self, session_id: str, word: str) -> bool:
-        """Register a word as used in a session"""
+    async def register_word(self, session_id: str, word: str) -> bool:
+        """Register a word as used in a session with database support"""
         # Create session if it doesn't exist
         if session_id not in self.used_words:
-            self.create_session()
+            await self.create_session()
             
         # Check if word is already used
         if word in self.used_words[session_id]:
             return False
-            
+        
+        if settings.USE_DATABASE:
+            try:
+                async for db in get_async_db():
+                    # Kiểm tra lại trong database
+                    if await crud.is_word_used_in_game(db, session_id, word):
+                        return False
+                    
+                    # Tính thời gian là lượt của ai
+                    is_player = len(self.used_words[session_id]) % 2 == 0
+                    
+                    # Thêm lượt đi vào database
+                    await crud.add_game_move(db, session_id, word, is_player)
+            except Exception as e:
+                logger.error(f"Error registering word in database: {str(e)}")
+        
         # Add word to used list
         self.used_words[session_id].append(word)
         
@@ -56,11 +85,24 @@ class GameService:
             
         return True
     
-    def is_word_used(self, session_id: str, word: str) -> bool:
+    async def is_word_used(self, session_id: str, word: str) -> bool:
         """Check if a word has been used in the session"""
+        # Kiểm tra trong memory cache trước (nhanh hơn)
         if session_id not in self.used_words:
             return False
-        return word in self.used_words[session_id]
+            
+        if word in self.used_words[session_id]:
+            return True
+            
+        # Nếu không tìm thấy trong cache, kiểm tra trong database
+        if settings.USE_DATABASE:
+            try:
+                async for db in get_async_db():
+                    return await crud.is_word_used_in_game(db, session_id, word)
+            except Exception as e:
+                logger.error(f"Error checking used word in database: {str(e)}")
+                
+        return False
     
     def validate_word_pair(self, input_word: str, response_word: str) -> bool:
         """Validate if the response word follows the game rules"""

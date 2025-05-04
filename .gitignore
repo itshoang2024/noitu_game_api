@@ -54,3 +54,15 @@ node_modules/
 
 # VSCode Temp Files
 tempCodeRunnerFile.py
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic migration versions
+alembic/versions/*.py
+!alembic/versions/__init__.py
+
+# Để test database
+!data/test_template.db

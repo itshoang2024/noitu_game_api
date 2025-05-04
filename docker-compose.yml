@@ -7,7 +7,8 @@ services:
     ports:
       - "8800:8800"
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data  # Volume để lưu database
+      - ./alembic:/app/alembic  # Volume cho migration scripts (tùy chọn)
     env_file:
       - .env
     restart: unless-stopped

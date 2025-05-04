@@ -14,9 +14,6 @@ class Settings(BaseSettings):
     # Gemini API Configuration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     MODEL_ID: str = "gemini-2.0-flash-lite"
-    # MODEL_ID: str = "gemini-1.5-flash-latest"
-    
-    # API URLs
     GEMINI_API_URL: str = f"https://generativelanguage.googleapis.com/v1beta/models/{{model_id}}:generateContent?key={{api_key}}"
     
     # Performance settings
@@ -30,7 +27,7 @@ class Settings(BaseSettings):
     MAX_VALIDATION_RETRIES: int = 3  # Số lần thử tối đa khi kiểm tra từ
 
     # Game settings
-    ENABLE_WARM_UP: bool = True  # Tắt trong môi trường phát triển
+    ENABLE_WARM_UP: bool = True  
 
     # Các bộ từ warm-up
     WARM_UP_WORDS_HOUSEHOLD: List[str] = [
@@ -65,6 +62,7 @@ class Settings(BaseSettings):
 
     # Bộ từ mặc định cho warm-up (sử dụng bộ đa dạng)
     WARM_UP_WORDS: List[str] = WARM_UP_WORDS_MIXED
+    # WARM_UP_WORDS: List[str] = ["xin chào"]
 
     # Gemini configuration
     GENERATION_CONFIG: dict = {
@@ -122,6 +120,10 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+    # Database configuration
+    DATABASE_URL: str = "sqlite:///data/noitu_game.db"
+    USE_DATABASE: bool = True  # Sử dụng database thay vì file
 
 # Create settings instance
 settings = Settings()
