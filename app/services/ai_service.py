@@ -481,6 +481,60 @@ class AIService:
                 
         return best_response or "Lỗi: Không thể tạo từ chất lượng cao.", best_score
     
+    async def generate_normal_response(self, user_input: str) -> str:
+        # Prepare prompt for Gemini
+        prompt_text = f"{user_input}"
+
+        # Prepare API payload
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt_text}]
+            }],
+            "generationConfig": {
+            "temperature": 0.2,
+            "topP": 0.1,
+            "topK": 1,
+            "maxOutputTokens": 100,
+            },
+            "safetySettings": settings.SAFETY_SETTINGS
+        }
+
+        try:
+            # Get the URL with actual model ID and API key
+            api_url = settings.GEMINI_API_URL.format(
+                model_id=settings.MODEL_ID,
+                api_key=settings.GEMINI_API_KEY
+            )
+        
+            # Send request to Gemini API
+            response = await self.http_client.post(api_url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+        
+            # Parse response
+            if not result.get("candidates"):
+                return "Lỗi: Gemini không thể tạo phản hồi."
+        
+            # Extract text from response
+            first_candidate = result["candidates"][0]
+            if "content" not in first_candidate or "parts" not in first_candidate["content"]:
+                return "Lỗi: Không thể trích xuất nội dung từ Gemini."
+        
+            reply_parts = first_candidate["content"]["parts"]
+            if not reply_parts or "text" not in reply_parts[0]:
+                return "Lỗi: Không thể trích xuất văn bản từ Gemini."
+        
+            reply = reply_parts[0]["text"].strip()
+        
+            # Return the generated reply
+            return reply
+
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            return f"Lỗi: Không thể kết nối đến Gemini ({type(e).__name__})."
+
+        except Exception as e:
+            return f"Lỗi: Lỗi máy chủ nội bộ khi xử lý yêu cầu ({type(e).__name__})."
+
     def get_cached_words(self) -> int:
         """Get the number of cached words"""
         return len(self.word_cache)

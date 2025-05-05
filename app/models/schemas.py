@@ -38,3 +38,10 @@ class SuggestionResponse(BaseModel):
 class ExplanationResponse(BaseModel):
     word: str = Field(..., description="The word that was explained")
     explanation: str = Field(..., description="Explanation of the word")
+
+class NPCIntroRequest(BaseModel):
+    npc_background: str
+
+class NPCIntroResponse(BaseModel):
+    reply: str
+    status: str
