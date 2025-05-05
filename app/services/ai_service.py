@@ -482,7 +482,6 @@ class AIService:
         return best_response or "Lỗi: Không thể tạo từ chất lượng cao.", best_score
     
     async def generate_normal_response(self, user_input: str) -> str:
-        # Prepare prompt for Gemini
         prompt_text = f"{user_input}"
 
         # Prepare API payload
@@ -491,7 +490,7 @@ class AIService:
                 "parts": [{"text": prompt_text}]
             }],
             "generationConfig": {
-            "temperature": 0.2,
+            "temperature": 0.9,
             "topP": 0.1,
             "topK": 1,
             "maxOutputTokens": 100,
@@ -513,16 +512,16 @@ class AIService:
         
             # Parse response
             if not result.get("candidates"):
-                return "Lỗi: Gemini không thể tạo phản hồi."
+                return "Chúc bạn ngày vui vẻ!"
         
             # Extract text from response
             first_candidate = result["candidates"][0]
             if "content" not in first_candidate or "parts" not in first_candidate["content"]:
-                return "Lỗi: Không thể trích xuất nội dung từ Gemini."
+                return "Chúc bạn ngày vui vẻ!"
         
             reply_parts = first_candidate["content"]["parts"]
             if not reply_parts or "text" not in reply_parts[0]:
-                return "Lỗi: Không thể trích xuất văn bản từ Gemini."
+                return "Chúc bạn ngày vui vẻ!"
         
             reply = reply_parts[0]["text"].strip()
         

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+﻿from fastapi import APIRouter, HTTPException
 from app.services.ai_service import AIService
 from app.models.schemas import NPCIntroResponse, NPCIntroRequest
 import random
@@ -28,7 +28,11 @@ async def generate_npc_intro(data: NPCIntroRequest):
     "Có trò chơi nào bạn muốn thử không?"
 ]
     # Get the casual conversational reply from the AI model
-    prompt = f"Bối cảnh NPC: {background}.NPC đang tham gia một lễ hội vui tươi nhân dịp Ngày Thống nhất tại Việt Nam. Hãy tạo 1-2 câu ngắn, tự nhiên thể hiện suy nghĩ hoặc cảm xúc hiện tại của NPC. Có thể lồng ghép một chút bối cảnh văn hóa địa phương nếu phù hợp. Mỗi câu cách nhau bằng dấu xuống dòng '\n', không có 2 '\n' liền nhau . {random.choice(prompts)}"
+    prompt = f"""Bối cảnh NPC: {background}.
+    NPC đang tham gia một lễ hội nhân dịp Ngày Thống nhất tại Việt Nam. Lễ hội có thể náo nhiệt hoặc có những khoảnh khắc trầm lắng. 
+    Hãy tạo 1-2 câu ngắn, tự nhiên thể hiện suy nghĩ hoặc cảm xúc hiện tại của NPC về tình huống sau: {random.choice(prompts)}.
+    Cảm xúc có thể vui vẻ, hồi hộp, lạ lẫm, bối rối, xúc động, hoặc bất kỳ phản ứng người thật nào phù hợp. 
+    Mỗi câu cách nhau bằng dấu xuống dòng '\n', không có 2 '\n' liền nhau."""
     ai_service = AIService.get_instance()
     reply = await ai_service.generate_normal_response(prompt)
     logger.info(f"{reply}")
