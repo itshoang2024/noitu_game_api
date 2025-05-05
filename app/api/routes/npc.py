@@ -18,15 +18,15 @@ async def generate_npc_intro(data: NPCIntroRequest):
         raise HTTPException(status_code=400, detail="Thiếu mô tả npc_background")
 
     prompts = [
-    "Hôm nay vui không?",
-    "Bạn thấy lễ hội thế nào?",
-    "Món ăn nào bạn thích nhất?",
-    "Bạn vừa làm gì ở lễ hội?",
-    "Bạn đến đây cùng ai vậy?",
-    "Bạn có hay đi lễ hội không?",
-    "Bạn thấy đông người quá không?",
-    "Có trò chơi nào bạn muốn thử không?"
-]
+        "Hôm nay vui không?",
+        "Bạn thấy lễ hội thế nào?",
+        "Món ăn nào bạn thích nhất?",
+        "Bạn vừa làm gì ở lễ hội?",
+        "Bạn đến đây cùng ai vậy?",
+        "Bạn có hay đi lễ hội không?",
+        "Bạn thấy đông người quá không?",
+        "Có trò chơi nào bạn muốn thử không?"
+    ]
     # Get the casual conversational reply from the AI model
     prompt = f"""Bối cảnh NPC: {background}.
     NPC đang tham gia một lễ hội nhân dịp Ngày Thống nhất tại Việt Nam. Lễ hội có thể náo nhiệt hoặc có những khoảnh khắc trầm lắng. 

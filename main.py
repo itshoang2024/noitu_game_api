@@ -14,7 +14,7 @@ logger = setup_logging()
 app = FastAPI(
     title="Nối Từ Game API",
     description="API cho game nối từ sử dụng Google Gemini",
-    version="1.0.0"
+    version="2.2"
 )
 
 # Add CORS middleware
