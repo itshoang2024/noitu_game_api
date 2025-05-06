@@ -123,7 +123,6 @@ class Settings(BaseSettings):
 
     # Database configuration
     DATABASE_URL: str = "sqlite:///data/noitu_game.db"
-    USE_DATABASE: bool = True  # Sử dụng database thay vì file
 
 # Create settings instance
 settings = Settings()

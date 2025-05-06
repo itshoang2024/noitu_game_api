@@ -14,6 +14,8 @@ from app.utils.word_evaluator import WordEvaluator
 from app.utils.constants import QUALITY_METRICS_PATH
 from app.database.base import get_db, get_async_db
 from app.database import crud
+from sqlalchemy.future import select
+from app.database.models import AIMetric
 
 logger = logging.getLogger(__name__)
 
@@ -21,37 +23,42 @@ class QualityTracker:
     """Tracks word quality metrics over time"""
     
     def __init__(self):
-        """Initialize quality tracker with proper path"""
-        self.file_path = QUALITY_METRICS_PATH
+        """Initialize quality tracker"""
         self.metrics = []
         self.theme_words_cache: Dict[str, List[str]] = {}  # Lưu trữ từ theo chủ đề
-        self.load_metrics()
-        self.load_theme_words()  # Tải chủ đề khi khởi tạo
 
-    def load_metrics(self):
-        """Load existing metrics from file"""
+    async def initialize(self):
+        """Async initialization"""
+        await self.load_metrics()
+        await self.load_theme_words()
+        return self
+
+
+    async def load_metrics(self):
+        """Load existing metrics from database"""
         try:
-            if os.path.exists(self.file_path):
-                with open(self.file_path, 'r', encoding='utf-8') as f:
-                    self.metrics = json.load(f)
-                logger.info(f"Loaded {len(self.metrics)} quality metric records")
+            async for db in get_async_db():
+                # Get metrics from AI_metrics table
+                result = await db.execute(select(AIMetric).order_by(AIMetric.created_at.desc()).limit(100))
+                metrics = result.scalars().all()
+                
+                # Convert to memory format
+                self.metrics = [
+                    {
+                        "timestamp": metric.created_at.isoformat(),
+                        "word": metric.response_word,
+                        "score": metric.quality_score,
+                        "user_input": metric.request_word,
+                        "session_id": metric.game_id
+                    }
+                    for metric in metrics
+                ]
+                logger.info(f"Loaded {len(self.metrics)} quality metric records from database")
         except Exception as e:
             logger.error(f"Error loading quality metrics: {str(e)}")
             self.metrics = []
     
-    async def save_metrics(self):
-        """Save metrics to file"""
-        try:
-            os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
-            with open(self.file_path, 'w', encoding='utf-8') as f:
-                json.dump(self.metrics, f, ensure_ascii=False, indent=2)
-            logger.info(f"Saved {len(self.metrics)} quality metric records")
-            return True
-        except Exception as e:
-            logger.error(f"Error saving quality metrics: {str(e)}")
-            return False
-    
-    def add_metric(self, word, score, user_input=None, session_id=None):
+    async def add_metric(self, word, score, user_input=None, session_id=None):
         """Add a new quality metric"""
         metric = {
             "timestamp": datetime.now().isoformat(),
@@ -62,84 +69,58 @@ class QualityTracker:
         }
         self.metrics.append(metric)
         
-        # Periodically save metrics (e.g., every 10 records)
-        if len(self.metrics) % 10 == 0:
-            asyncio.create_task(self.save_metrics())
-    
-    def get_average_score(self, period=None):
-        """Get average quality score, optionally filtered by period"""
-        if not self.metrics:
-            return 0.0
-            
-        if period:
-            # Filter by time period (e.g. 'day', 'week', 'month')
-            now = datetime.now()
-            filtered_metrics = []
-            
-            for metric in self.metrics:
-                try:
-                    metric_time = datetime.fromisoformat(metric["timestamp"])
-                    if period == 'day' and (now - metric_time).days <= 1:
-                        filtered_metrics.append(metric)
-                    elif period == 'week' and (now - metric_time).days <= 7:
-                        filtered_metrics.append(metric)
-                    elif period == 'month' and (now - metric_time).days <= 30:
-                        filtered_metrics.append(metric)
-                except Exception:
-                    continue
-            
-            if not filtered_metrics:
-                return 0.0
+        # Add to database
+        try:
+            async for db in get_async_db():
+                await crud.add_ai_metric(
+                    db,
+                    request_word=user_input or "",
+                    response_word=word,
+                    quality_score=score,
+                    response_time_ms=0,  # Add response time if available
+                    game_id=session_id,
+                    success=True
+                )
+        except Exception as e:
+            logger.error(f"Error adding metric to database: {str(e)}")
+
+    async def load_theme_words(self):
+        """Tải danh sách từ theo chủ đề từ database"""
+        try:
+            async for db in get_async_db():
+                # Get all themes
+                themes = await crud.get_all_themes(db)
                 
-            total = sum(m["score"] for m in filtered_metrics)
-            return total / len(filtered_metrics)
-        else:
-            # All time average
-            total = sum(m["score"] for m in self.metrics)
-            return total / len(self.metrics)
-    
-    def get_summary_stats(self):
-        """Get summary statistics about word quality"""
-        if not self.metrics:
-            return {
-                "count": 0,
-                "avg_score": 0.0,
-                "avg_score_day": 0.0,
-                "avg_score_week": 0.0,
-                "avg_score_month": 0.0
-            }
-            
-        return {
-            "count": len(self.metrics),
-            "avg_score": self.get_average_score(),
-            "avg_score_day": self.get_average_score('day'),
-            "avg_score_week": self.get_average_score('week'),
-            "avg_score_month": self.get_average_score('month')
-        }
-    
-    async def save_theme_words(self):
-        """Lưu danh sách từ theo chủ đề vào file"""
-        try:
-            theme_file_path = os.path.join(os.path.dirname(self.file_path), "theme_words.json")
-            with open(theme_file_path, 'w', encoding='utf-8') as f:
-                json.dump(self.theme_words_cache, f, ensure_ascii=False, indent=2)
-            logger.info(f"Đã lưu {len(self.theme_words_cache)} chủ đề vào {theme_file_path}")
-            return True
+                # Load words for each theme
+                for theme in themes:
+                    theme_words = await crud.get_theme_words(db, theme.id)
+                    self.theme_words_cache[theme.name] = [word.word for word in theme_words]
+                    
+                logger.info(f"Loaded theme words for {len(themes)} themes from database")
         except Exception as e:
-            logger.error(f"Lỗi khi lưu từ theo chủ đề: {str(e)}")
-            return False
-    
-    def load_theme_words(self):
-        """Tải danh sách từ theo chủ đề từ file"""
-        try:
-            theme_file_path = os.path.join(os.path.dirname(self.file_path), "theme_words.json")
-            if os.path.exists(theme_file_path):
-                with open(theme_file_path, 'r', encoding='utf-8') as f:
-                    self.theme_words_cache = json.load(f)
-                logger.info(f"Đã tải {len(self.theme_words_cache)} chủ đề từ {theme_file_path}")
-        except Exception as e:
-            logger.error(f"Lỗi khi tải từ theo chủ đề: {str(e)}")
+            logger.error(f"Error loading theme words from database: {str(e)}")
             self.theme_words_cache = {}
+
+    async def save_theme_words(self):
+        """Lưu danh sách từ theo chủ đề vào database"""
+        try:
+            async for db in get_async_db():
+                for theme_name, words in self.theme_words_cache.items():
+                    # Get or create theme
+                    theme = await crud.get_theme_by_name(db, theme_name)
+                    if not theme:
+                        theme = await crud.create_theme(db, theme_name)
+                    
+                    # Clear existing theme words (optional, depends on your use case)
+                    # Add new theme words
+                    for word in words:
+                        await crud.add_word_to_theme(db, theme.id, word)
+                        
+                logger.info(f"Saved {len(self.theme_words_cache)} themes to database")
+                return True
+        except Exception as e:
+            logger.error(f"Error saving theme words to database: {str(e)}")
+            return False
 
 class AIService:
     """Service for interacting with Gemini AI API"""
@@ -170,7 +151,8 @@ class AIService:
     async def initialize(self):
         """Initialize the service and word evaluator"""
         await self.word_evaluator.initialize()
-        logger.info("AIService and WordEvaluator initialized")
+        await self.quality_tracker.initialize()
+        logger.info("AIService, WordEvaluator and QualityTracker initialized")
 
     async def close(self):
         """Close resources"""

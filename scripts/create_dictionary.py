@@ -243,9 +243,5 @@ async def main():
     stats_db = await generate_dictionary_in_database()
     logger.info(f"Database dictionary generation complete. Stats: {stats_db}")
     
-    # Vẫn giữ lại code tạo file để tương thích ngược
-    stats_file = await generate_dictionary_files()
-    logger.info(f"File dictionary generation complete. Stats: {stats_file}")
-
 if __name__ == "__main__":
     asyncio.run(main())

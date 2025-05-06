@@ -51,31 +51,30 @@ class GameService:
         return session_id
     
     async def register_word(self, session_id: str, word: str) -> bool:
-        """Register a word as used in a session with database support"""
+        """Register a word as used in a session"""
         # Create session if it doesn't exist
         if session_id not in self.used_words:
             await self.create_session()
             
-        # Check if word is already used
+        # Check if word is already used in memory cache
         if word in self.used_words[session_id]:
             return False
         
-        if settings.USE_DATABASE:
-            try:
-                async for db in get_async_db():
-                    # Kiểm tra lại trong database
-                    if await crud.is_word_used_in_game(db, session_id, word):
-                        return False
-                    
-                    # Tính thời gian là lượt của ai
-                    is_player = len(self.used_words[session_id]) % 2 == 0
-                    
-                    # Thêm lượt đi vào database
-                    await crud.add_game_move(db, session_id, word, is_player)
-            except Exception as e:
-                logger.error(f"Error registering word in database: {str(e)}")
+        try:
+            async for db in get_async_db():
+                # Kiểm tra lại trong database
+                if await crud.is_word_used_in_game(db, session_id, word):
+                    return False
+                
+                # Tính thời gian là lượt của ai
+                is_player = len(self.used_words[session_id]) % 2 == 0
+                
+                # Thêm lượt đi vào database
+                await crud.add_game_move(db, session_id, word, is_player)
+        except Exception as e:
+            logger.error(f"Error registering word in database: {str(e)}")
         
-        # Add word to used list
+        # Add word to used list in memory for quick access
         self.used_words[session_id].append(word)
         
         # Update stats

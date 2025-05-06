@@ -34,68 +34,30 @@ class WordEvaluator:
         self.word_chains: Dict[str, List[str]] = {}  # syllable -> list of words that start with it
 
     async def initialize(self):
-        """Load dictionaries asynchronously with better error handling"""
+        """Load dictionaries from database"""
         if self.is_initialized:
             return
 
         try:
-            # Ensure the data directory exists
-            os.makedirs(os.path.dirname(self.dictionary_path), exist_ok=True)
-
-            if settings.USE_DATABASE:
-                async for db in get_async_db():
-                    # Lấy từ common từ database
+            async for db in get_async_db():
+                # Lấy từ common từ database
+                common_words = await crud.get_all_common_words(db)
+                self.common_words = {word.word for word in common_words}
+                
+                # Nếu không có từ nào trong database, tạo từ điển tối thiểu
+                if not self.common_words:
+                    await self._create_minimal_dictionary_in_db(db)
+                    # Lấy lại sau khi tạo
                     common_words = await crud.get_all_common_words(db)
                     self.common_words = {word.word for word in common_words}
                     
-                    # Nếu không có từ nào trong database, tạo từ điển tối thiểu
-                    if not self.common_words:
-                        await self._create_minimal_dictionary_in_db(db)
-                        # Lấy lại sau khi tạo
-                        common_words = await crud.get_all_common_words(db)
-                        self.common_words = {word.word for word in common_words}
-                        
-                    logger.info(f"Loaded {len(self.common_words)} common words from database")
-                    
-                    # Cache tất cả các từ để kiểm tra nhanh
-                    result = await db.execute(select(Word))
-                    all_words = result.scalars().all()
-                    self.dictionary = {word.word for word in all_words}
-                    logger.info(f"Loaded {len(self.dictionary)} words from database")
-            else:
-                # Load main dictionary if exists
-                loaded_dictionary = False
-                if os.path.exists(self.dictionary_path):
-                    try:
-                        with open(self.dictionary_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            self.dictionary = {word.strip().lower() for word in content.split('\n') if word.strip()}
-                        logger.info(f"Loaded {len(self.dictionary)} words from dictionary")
-                        loaded_dictionary = True
-                    except Exception as e:
-                        logger.error(f"Error reading dictionary file: {str(e)}")
-                        
-                if not loaded_dictionary:
-                    # Create minimal dictionary if file doesn't exist or couldn't be read
-                    logger.warning(f"Dictionary file not found or invalid at {self.dictionary_path}, creating minimal dictionary")
-                    self._create_minimal_dictionary()
-                        
-                # Load common words if exists
-                loaded_common_words = False
-                if os.path.exists(self.common_words_path):
-                    try:
-                        with open(self.common_words_path, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                            self.common_words = {word.strip().lower() for word in content.split('\n') if word.strip()}
-                        logger.info(f"Loaded {len(self.common_words)} common words")
-                        loaded_common_words = True
-                    except Exception as e:
-                        logger.error(f"Error reading common words file: {str(e)}")
+                logger.info(f"Loaded {len(self.common_words)} common words from database")
                 
-                if not loaded_common_words:
-                    # Create minimal common words list if file doesn't exist or couldn't be read
-                    logger.warning(f"Common words file not found or invalid at {self.common_words_path}, creating minimal list")
-                    self._create_minimal_common_words()
+                # Cache tất cả các từ để kiểm tra nhanh
+                result = await db.execute(select(Word))
+                all_words = result.scalars().all()
+                self.dictionary = {word.word for word in all_words}
+                logger.info(f"Loaded {len(self.dictionary)} words from database")
                 
             # Important: Set is_initialized first before building word chains
             self.is_initialized = True
@@ -105,17 +67,11 @@ class WordEvaluator:
                 
         except Exception as e:
             logger.error(f"Error initializing WordEvaluator: {str(e)}")
-            # Fallback to file-based dictionary
-            self._create_minimal_dictionary()
-            self._create_minimal_common_words()
+            # Still create a minimal dictionary in memory for fallback
+            self._create_minimal_dictionary_in_memory()
             self.is_initialized = True
-            
-        # Always ensure the dictionary has at least some words
-        if len(self.dictionary) < 10:
-            logger.warning("Dictionary has too few words, adding minimal set")
-            self._create_minimal_dictionary()
 
-    def _create_minimal_dictionary(self):
+    def _create_minimal_dictionary_in_memory(self):
         """Create a minimal dictionary with common Vietnamese words"""
         base_words = [
             "học sinh", "sinh viên", "viên chức", "chức vụ", "vụ việc", "việc làm",
@@ -172,40 +128,29 @@ class WordEvaluator:
             logger.error(f"Error creating minimal common words file: {str(e)}")
     
     async def add_to_dictionary(self, word: str) -> bool:
-        """Add a new word to dictionary with database support"""
+        """Add a new word to dictionary"""
         word = word.strip().lower()
         if not word or word in self.dictionary:
             return False
 
-        if settings.USE_DATABASE:
-            try:
-                async for db in get_async_db():
-                    # Kiểm tra tồn tại trước khi thêm
-                    existing_word = await crud.get_word(db, word)
-                    if existing_word:
-                        self.dictionary.add(word)  # Đảm bảo từ có trong bộ nhớ cache
-                        return True  # Trả về thành công vì từ đã tồn tại
-                    else:
-                        await crud.create_word(db, word)
-                self.dictionary.add(word)
-                return True
-            except Exception as e:
-                logger.error(f"Error adding word to database: {str(e)}")
-                # Thêm vào dictionary memory để tránh lỗi tương tự
-                self.dictionary.add(word)
-                return True  # Vẫn trả về True vì từ đã được thêm vào bộ nhớ
-        else:
+        try:
+            async for db in get_async_db():
+                # Kiểm tra tồn tại trước khi thêm
+                existing_word = await crud.get_word(db, word)
+                if existing_word:
+                    self.dictionary.add(word)  # Đảm bảo từ có trong bộ nhớ cache
+                    return True  # Trả về thành công vì từ đã tồn tại
+                else:
+                    await crud.create_word(db, word)
+            # Update in-memory cache
             self.dictionary.add(word)
-            
-            # Append to file asynchronously
-            try:
-                async with aiofiles.open(self.dictionary_path, mode='a', encoding='utf-8') as f:
-                    await f.write(f"{word}\n")
-                return True
-            except Exception as e:
-                logger.error(f"Error adding word to dictionary file: {str(e)}")
-                return False
-    
+            return True
+        except Exception as e:
+            logger.error(f"Error adding word to database: {str(e)}")
+            # Still add to memory cache to prevent repeated errors
+            self.dictionary.add(word)
+            return True
+        
     def is_in_dictionary(self, word: str) -> bool:
         """Check if word exists in the dictionary"""
         return word.strip().lower() in self.dictionary
