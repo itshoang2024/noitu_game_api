@@ -179,86 +179,125 @@ class AIService:
             logger.info("HTTP client closed")
 
     async def warm_up_model(self):
-        """Warm up the model with predefined words"""
-        logger.info("Starting model warm-up...")
+        """Warm up the model with an adaptive, efficient strategy"""
+        logger.info("Starting model warm-up with adaptive strategy...")
 
-        # Đảm bảo word evaluator đã được khởi tạo đúng cách
+        # Ensure word evaluator is initialized
         await self.initialize()
-
-        # Kiểm tra thêm một lần nữa
-        word_evaluator = self.word_evaluator
-        if not word_evaluator.is_initialized:
+        
+        if not self.word_evaluator.is_initialized:
             logger.error("WordEvaluator initialization failed, forcing initialization")
-            word_evaluator.is_initialized = True
-            # Đảm bảo xây dựng word chains
-            await word_evaluator.build_word_chains()
+            self.word_evaluator.is_initialized = True
+            await self.word_evaluator.build_word_chains()
 
         start_time = time.time()
         
-        # Limit concurrent requests during warm-up 
-        batch_size = 4  # Chỉ xử lý 4 từ một lúc
-        semaphore = asyncio.Semaphore(3)  # Giới hạn đồng thời tối đa 3 yêu cầu
+        # Adaptive rate limiting parameters
+        initial_concurrency = 3
+        max_concurrency = 8
+        min_concurrency = 1
+        current_concurrency = initial_concurrency
         
-        async def warm_up_word(word):
-            async with semaphore:
-                try:
-                    start = time.time()
-                    result = await self.generate_response(word, use_cache=False)
-                    end = time.time()
-                    
-                    # Evaluate word quality
-                    if not result.startswith("Lỗi:"):
-                        quality_score, reason = await self.word_evaluator.evaluate_word(result)
-                        logger.info(f"Warm-up: '{word}' → '{result}' (Score: {quality_score:.2f}, Reason: {reason})")
-                        self.quality_scores[result] = quality_score
-                    else:
-                        logger.warning(f"Warm-up error: '{word}' → '{result}'")
-                    
-                    return word, result, end - start
-                except Exception as e:
-                    logger.error(f"Error warming up word '{word}': {str(e)}")
-                    return word, f"Lỗi: {str(e)}", 0
-        
+        # Success tracking
         success_count = 0
         total_time = 0.0
         
-        # Xử lý từng lô từ
-        for i in range(0, len(settings.WARM_UP_WORDS), batch_size):
-            batch = settings.WARM_UP_WORDS[i:i+batch_size]
-            logger.info(f"Đang xử lý lô {i//batch_size + 1}/{(len(settings.WARM_UP_WORDS) + batch_size - 1) // batch_size}")
-            
-            # Xử lý lô hiện tại
-            tasks = [warm_up_word(word) for word in batch]
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Xử lý kết quả
-            for result in batch_results:
-                if isinstance(result, tuple) and len(result) == 3:
-                    word, response, response_time = result
-                    if not response.startswith("Lỗi:"):
-                        self.word_cache[word] = response
-                        success_count += 1
-                        total_time += response_time
-            
-            # Chờ trước khi xử lý lô tiếp theo để tránh rate limiting
-            if i + batch_size < len(settings.WARM_UP_WORDS):
-                wait_time = 5  # Đợi 5 giây giữa các lô
-                logger.info(f"Hoàn thành lô {i//batch_size + 1}, đợi {wait_time}s trước lô tiếp theo...")
-                await asyncio.sleep(wait_time)
+        # Work queue for better management
+        queue = asyncio.Queue()
+        for word in settings.WARM_UP_WORDS:
+            await queue.put(word)
         
-        # Calculate average response time
+        # Track recent response times for adaptive behavior
+        recent_times = []
+        
+        # Process word function with adaptive rate limiting
+        async def process_word():
+            nonlocal success_count, total_time, current_concurrency
+            
+            try:
+                # Get word from queue with timeout
+                word = await asyncio.wait_for(queue.get(), 0.1)
+            except asyncio.TimeoutError:
+                return False  # No more words
+                
+            try:
+                # Process the word
+                start = time.time()
+                result = await self.generate_response(word, use_cache=False)
+                process_time = time.time() - start
+                
+                # Update recent times list (keep last 5)
+                recent_times.append(process_time)
+                if len(recent_times) > 5:
+                    recent_times.pop(0)
+                
+                # Adjust concurrency based on recent response times
+                avg_time = sum(recent_times) / len(recent_times)
+                if avg_time > 2.5 and current_concurrency > min_concurrency:
+                    # Responses too slow, reduce concurrency
+                    current_concurrency = max(min_concurrency, current_concurrency - 1)
+                    logger.info(f"Reducing concurrency to {current_concurrency} (avg response: {avg_time:.2f}s)")
+                elif avg_time < 1.0 and current_concurrency < max_concurrency:
+                    # Responses fast, increase concurrency
+                    current_concurrency = min(max_concurrency, current_concurrency + 1)
+                    logger.info(f"Increasing concurrency to {current_concurrency} (avg response: {avg_time:.2f}s)")
+                
+                # Evaluate word quality
+                if not result.startswith("Lỗi:"):
+                    quality_score, reason = await self.word_evaluator.evaluate_word(result)
+                    logger.info(f"Warm-up: '{word}' → '{result}' (Score: {quality_score:.2f}, Time: {process_time:.2f}s)")
+                    self.quality_scores[result] = quality_score
+                    self.word_cache[word] = result
+                    success_count += 1
+                    total_time += process_time
+                else:
+                    logger.warning(f"Warm-up error: '{word}' → '{result}'")
+                    # Put back in queue for retry (with limit)
+                    if queue.qsize() < len(settings.WARM_UP_WORDS) * 2:  # Prevent infinite retries
+                        await queue.put(word)
+                        
+                # Adaptive delay based on response time
+                await asyncio.sleep(min(0.2, process_time * 0.1))  # Proportional delay
+                
+                return True
+            except Exception as e:
+                logger.error(f"Error processing '{word}': {str(e)}")
+                # Put back in queue for retry (with limit)
+                if queue.qsize() < len(settings.WARM_UP_WORDS) * 2:
+                    await queue.put(word)
+                return True
+            finally:
+                queue.task_done()
+        
+        # Main processing loop with dynamic workers
+        while not queue.empty():
+            # Create batch of workers based on current concurrency
+            workers = [process_word() for _ in range(current_concurrency)]
+            await asyncio.gather(*workers)
+            
+            # Log progress
+            remaining = queue.qsize()
+            progress = (len(settings.WARM_UP_WORDS) - remaining) / len(settings.WARM_UP_WORDS) * 100
+            logger.info(f"Warm-up progress: {progress:.1f}% ({remaining} words remaining)")
+            
+            # Small pause to prevent CPU spinning if queue gets empty
+            if queue.empty() and success_count < len(settings.WARM_UP_WORDS):
+                await asyncio.sleep(0.5)
+        
+        # Calculate final statistics
         if success_count > 0:
             self.average_response_time = total_time / success_count
         
         duration = time.time() - start_time
-        logger.info(f"Warm-up hoàn thành trong {duration:.2f}s. {success_count}/{len(settings.WARM_UP_WORDS)} thành công. Thời gian phản hồi TB: {self.average_response_time:.3f}s")
+        logger.info(f"Warm-up completed in {duration:.2f}s. {success_count}/{len(settings.WARM_UP_WORDS)} successful. "
+                f"Average response time: {self.average_response_time:.3f}s")
         
-        # Lưu các chủ đề nếu có
+        # Save any themes
         if hasattr(self.quality_tracker, 'theme_words_cache') and self.quality_tracker.theme_words_cache:
             await self.quality_tracker.save_theme_words()
         
-        self.is_ready = True
-
+        self.is_ready = True    
+    
     async def generate_response(self, user_input: str, used_words: List[str] = None, 
                             session_id: str = None, game_service = None,
                             use_cache: bool = True, max_retries: int = settings.MAX_RETRIES, 

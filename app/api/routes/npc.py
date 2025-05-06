@@ -29,10 +29,10 @@ async def generate_npc_intro(data: NPCIntroRequest):
     ]
     # Get the casual conversational reply from the AI model
     prompt = f"""Bối cảnh NPC: {background}.
-    NPC đang tham gia một lễ hội nhân dịp Ngày Thống nhất tại Việt Nam. Lễ hội có thể náo nhiệt hoặc có những khoảnh khắc trầm lắng. 
-    Hãy tạo 1-2 câu ngắn, tự nhiên thể hiện suy nghĩ hoặc cảm xúc hiện tại của NPC về tình huống sau: {random.choice(prompts)}.
-    Cảm xúc có thể vui vẻ, hồi hộp, lạ lẫm, bối rối, xúc động, hoặc bất kỳ phản ứng người thật nào phù hợp. 
-    Mỗi câu cách nhau bằng dấu xuống dòng '\n', không có 2 '\n' liền nhau."""
+        NPC đang tham gia một lễ hội nhân dịp Ngày Thống nhất tại Việt Nam. Lễ hội có thể náo nhiệt hoặc có những khoảnh khắc trầm lắng. 
+        Hãy tạo 1-2 câu ngắn, tự nhiên thể hiện suy nghĩ hoặc cảm xúc hiện tại của NPC về tình huống sau: {random.choice(prompts)}.
+        Cảm xúc có thể vui vẻ, hồi hộp, lạ lẫm, bối rối, xúc động, hoặc bất kỳ phản ứng người thật nào phù hợp. 
+        Mỗi câu cách nhau bằng dấu xuống dòng '\n', không có 2 '\n' liền nhau."""
     ai_service = AIService.get_instance()
     reply = await ai_service.generate_normal_response(prompt)
     logger.info(f"{reply}")
