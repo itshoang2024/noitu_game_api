@@ -175,9 +175,13 @@ async def generate_dictionary_in_database():
         # Thêm các từ theo mảng
         words_added = 0
         common_words_added = 0
+
+        # Loại bỏ từ trùng, giữ nguyên thứ tự ban đầu để tránh vi phạm unique constraint
+        unique_common_word_pairs = list(dict.fromkeys(COMMON_WORD_PAIRS))
+        unique_common_words = list(dict.fromkeys(COMMON_WORDS))
         
         # Thêm các từ phổ biến
-        for word in COMMON_WORD_PAIRS:
+        for word in unique_common_word_pairs:
             syllables = word.split()
             word_obj = models.Word(
                 word=word,
@@ -188,6 +192,7 @@ async def generate_dictionary_in_database():
                 last_syllable=syllables[-1] if syllables else ""
             )
             db.add(word_obj)
+            db.flush()  # Bảo đảm có word_obj.id trước khi tạo ThemeWord
             words_added += 1
             common_words_added += 1
             
@@ -205,7 +210,7 @@ async def generate_dictionary_in_database():
                 db.add(models.ThemeWord(theme_id=theme_objects["education"].id, word_id=word_obj.id))
         
         # Thêm các từ phổ biến khác
-        for word in COMMON_WORDS:
+        for word in unique_common_words:
             syllables = word.split()
             word_obj = models.Word(
                 word=word,

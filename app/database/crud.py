@@ -174,6 +174,17 @@ async def get_all_themes(db: Session) -> List[Theme]:
 async def add_word_to_theme(db: Session, theme_id: int, word: str) -> ThemeWord:
     """Thêm một từ vào chủ đề"""
     word_obj = await get_or_create_word(db, word)
+
+    # Skip insert if this theme-word mapping already exists
+    existing = await db.execute(
+        select(ThemeWord).filter(
+            ThemeWord.theme_id == theme_id,
+            ThemeWord.word_id == word_obj.id
+        )
+    )
+    existing_theme_word = existing.scalars().first()
+    if existing_theme_word:
+        return existing_theme_word
     
     theme_word = ThemeWord(
         theme_id=theme_id,

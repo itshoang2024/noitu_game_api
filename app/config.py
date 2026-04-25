@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     
     # Gemini API Configuration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    MODEL_ID: str = "gemini-2.0-flash-lite"
+    MODEL_ID: str = os.getenv("MODEL_ID", "gemini-3.1-flash-lite-preview")
     GEMINI_API_URL: str = f"https://generativelanguage.googleapis.com/v1beta/models/{{model_id}}:generateContent?key={{api_key}}"
     
     # Performance settings
@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # Game settings
     ENABLE_WARM_UP: bool = True  
+    USE_DATABASE: bool = True
 
     # Các bộ từ warm-up
     WARM_UP_WORDS_HOUSEHOLD: List[str] = [
@@ -117,9 +118,7 @@ class Settings(BaseSettings):
     }
 
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
     # Database configuration
     DATABASE_URL: str = "sqlite:///data/noitu_game.db"
