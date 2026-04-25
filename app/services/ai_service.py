@@ -498,7 +498,7 @@ class AIService:
         
         # Vẫn duy trì việc track quality metrics trong memory
         if best_response is not None:
-            self.quality_tracker.add_metric(best_response, best_score, user_input, session_id)
+            await self.quality_tracker.add_metric(best_response, best_score, user_input, session_id)
                 
         return best_response or "Lỗi: Không thể tạo từ chất lượng cao.", best_score
     
