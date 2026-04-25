@@ -2,9 +2,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy.future import select
 from sqlalchemy import func, or_
 from typing import List, Optional, Dict, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .models import Word, Game, GameMove, Theme, ThemeWord, AIMetric
+
+
+def utc_now_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 # --- Word operations ---
 
@@ -67,7 +71,7 @@ async def create_game(db: Session, session_id: str, theme_id: Optional[int] = No
     game = Game(
         id=session_id,
         theme_id=theme_id,
-        start_time=datetime.utcnow(),
+        start_time=utc_now_naive(),
         status="active"
     )
     db.add(game)
@@ -85,7 +89,7 @@ async def end_game(db: Session, session_id: str) -> Optional[Game]:
     game = await get_game(db, session_id)
     if game:
         game.status = "completed"
-        game.end_time = datetime.utcnow()
+        game.end_time = utc_now_naive()
         if game.start_time:
             game.duration_seconds = (game.end_time - game.start_time).seconds
         await db.commit()

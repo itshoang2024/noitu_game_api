@@ -160,125 +160,132 @@ class AIService:
             await self.http_client.aclose()
             logger.info("HTTP client closed")
 
+    async def _ensure_warm_up_dependencies(self):
+        await self.initialize()
+        if self.word_evaluator.is_initialized:
+            return
+
+        logger.error("WordEvaluator initialization failed, forcing initialization")
+        self.word_evaluator.is_initialized = True
+        await self.word_evaluator.build_word_chains()
+
+    def _update_recent_times(self, recent_times: List[float], process_time: float):
+        recent_times.append(process_time)
+        if len(recent_times) > 5:
+            recent_times.pop(0)
+
+    def _adjust_warm_up_concurrency(
+        self,
+        current_concurrency: int,
+        recent_times: List[float],
+        min_concurrency: int,
+        max_concurrency: int,
+    ) -> int:
+        if not recent_times:
+            return current_concurrency
+
+        average_time = sum(recent_times) / len(recent_times)
+        if average_time > 2.5 and current_concurrency > min_concurrency:
+            new_concurrency = max(min_concurrency, current_concurrency - 1)
+            logger.info(f"Reducing concurrency to {new_concurrency} (avg response: {average_time:.2f}s)")
+            return new_concurrency
+
+        if average_time < 1.0 and current_concurrency < max_concurrency:
+            new_concurrency = min(max_concurrency, current_concurrency + 1)
+            logger.info(f"Increasing concurrency to {new_concurrency} (avg response: {average_time:.2f}s)")
+            return new_concurrency
+
+        return current_concurrency
+
+    async def _warm_up_single_word(self, seed_word: str) -> Tuple[bool, float]:
+        try:
+            start_time = time.time()
+            generated_word = await self.generate_response(seed_word, use_cache=False)
+            process_time = time.time() - start_time
+
+            if generated_word.startswith("Lỗi:"):
+                logger.warning(f"Warm-up error: '{seed_word}' → '{generated_word}'")
+                return False, process_time
+
+            quality_score, _ = await self.word_evaluator.evaluate_word(generated_word)
+            logger.info(
+                f"Warm-up: '{seed_word}' → '{generated_word}' "
+                f"(Score: {quality_score:.2f}, Time: {process_time:.2f}s)"
+            )
+            self.quality_scores[generated_word] = quality_score
+            self.word_cache[seed_word] = generated_word
+            return True, process_time
+        except Exception as exc:
+            logger.error(f"Error processing '{seed_word}': {str(exc)}")
+            return False, 0.0
+
     async def warm_up_model(self):
         """Warm up the model with an adaptive, efficient strategy"""
         logger.info("Starting model warm-up with adaptive strategy...")
 
-        # Ensure word evaluator is initialized
-        await self.initialize()
-        
-        if not self.word_evaluator.is_initialized:
-            logger.error("WordEvaluator initialization failed, forcing initialization")
-            self.word_evaluator.is_initialized = True
-            await self.word_evaluator.build_word_chains()
+        await self._ensure_warm_up_dependencies()
 
         start_time = time.time()
-        
-        # Adaptive rate limiting parameters
-        initial_concurrency = 3
-        max_concurrency = 8
         min_concurrency = 1
-        current_concurrency = initial_concurrency
-        
-        # Success tracking
+        max_concurrency = 8
+        current_concurrency = 3
+        max_retries_per_word = 2
+
+        pending_items = list(enumerate(settings.WARM_UP_WORDS))
+        retry_counts: Dict[int, int] = {}
+        completed_item_ids = set()
+        recent_times: List[float] = []
         success_count = 0
         total_time = 0.0
-        
-        # Work queue for better management
-        queue = asyncio.Queue()
-        for word in settings.WARM_UP_WORDS:
-            await queue.put(word)
-        
-        # Track recent response times for adaptive behavior
-        recent_times = []
-        
-        # Process word function with adaptive rate limiting
-        async def process_word():
-            nonlocal success_count, total_time, current_concurrency
-            
-            try:
-                # Get word from queue with timeout
-                word = await asyncio.wait_for(queue.get(), 0.1)
-            except asyncio.TimeoutError:
-                return False  # No more words
-                
-            try:
-                # Process the word
-                start = time.time()
-                result = await self.generate_response(word, use_cache=False)
-                process_time = time.time() - start
-                
-                # Update recent times list (keep last 5)
-                recent_times.append(process_time)
-                if len(recent_times) > 5:
-                    recent_times.pop(0)
-                
-                # Adjust concurrency based on recent response times
-                avg_time = sum(recent_times) / len(recent_times)
-                if avg_time > 2.5 and current_concurrency > min_concurrency:
-                    # Responses too slow, reduce concurrency
-                    current_concurrency = max(min_concurrency, current_concurrency - 1)
-                    logger.info(f"Reducing concurrency to {current_concurrency} (avg response: {avg_time:.2f}s)")
-                elif avg_time < 1.0 and current_concurrency < max_concurrency:
-                    # Responses fast, increase concurrency
-                    current_concurrency = min(max_concurrency, current_concurrency + 1)
-                    logger.info(f"Increasing concurrency to {current_concurrency} (avg response: {avg_time:.2f}s)")
-                
-                # Evaluate word quality
-                if not result.startswith("Lỗi:"):
-                    quality_score, reason = await self.word_evaluator.evaluate_word(result)
-                    logger.info(f"Warm-up: '{word}' → '{result}' (Score: {quality_score:.2f}, Time: {process_time:.2f}s)")
-                    self.quality_scores[result] = quality_score
-                    self.word_cache[word] = result
+        total_words = len(pending_items)
+
+        while pending_items:
+            batch_items = pending_items[:current_concurrency]
+            pending_items = pending_items[current_concurrency:]
+            batch_tasks = [self._warm_up_single_word(seed_word) for _, seed_word in batch_items]
+            batch_results = await asyncio.gather(*batch_tasks)
+
+            for (item_id, seed_word), (is_success, process_time) in zip(batch_items, batch_results):
+                if process_time > 0:
+                    self._update_recent_times(recent_times, process_time)
+
+                if is_success:
                     success_count += 1
                     total_time += process_time
+                    completed_item_ids.add(item_id)
+                    continue
+
+                retry_counts[item_id] = retry_counts.get(item_id, 0) + 1
+                if retry_counts[item_id] <= max_retries_per_word:
+                    pending_items.append((item_id, seed_word))
                 else:
-                    logger.warning(f"Warm-up error: '{word}' → '{result}'")
-                    # Put back in queue for retry (with limit)
-                    if queue.qsize() < len(settings.WARM_UP_WORDS) * 2:  # Prevent infinite retries
-                        await queue.put(word)
-                        
-                # Adaptive delay based on response time
-                await asyncio.sleep(min(0.2, process_time * 0.1))  # Proportional delay
-                
-                return True
-            except Exception as e:
-                logger.error(f"Error processing '{word}': {str(e)}")
-                # Put back in queue for retry (with limit)
-                if queue.qsize() < len(settings.WARM_UP_WORDS) * 2:
-                    await queue.put(word)
-                return True
-            finally:
-                queue.task_done()
-        
-        # Main processing loop with dynamic workers
-        while not queue.empty():
-            # Create batch of workers based on current concurrency
-            workers = [process_word() for _ in range(current_concurrency)]
-            await asyncio.gather(*workers)
-            
-            # Log progress
-            remaining = queue.qsize()
-            progress = (len(settings.WARM_UP_WORDS) - remaining) / len(settings.WARM_UP_WORDS) * 100
-            logger.info(f"Warm-up progress: {progress:.1f}% ({remaining} words remaining)")
-            
-            # Small pause to prevent CPU spinning if queue gets empty
-            if queue.empty() and success_count < len(settings.WARM_UP_WORDS):
-                await asyncio.sleep(0.5)
-        
-        # Calculate final statistics
+                    completed_item_ids.add(item_id)
+
+            current_concurrency = self._adjust_warm_up_concurrency(
+                current_concurrency=current_concurrency,
+                recent_times=recent_times,
+                min_concurrency=min_concurrency,
+                max_concurrency=max_concurrency,
+            )
+
+            if total_words:
+                progress = len(completed_item_ids) / total_words * 100
+                logger.info(f"Warm-up progress: {progress:.1f}% ({len(pending_items)} words remaining)")
+
         if success_count > 0:
             self.average_response_time = total_time / success_count
-        
+
         duration = time.time() - start_time
-        logger.info(f"Warm-up completed in {duration:.2f}s. {success_count}/{len(settings.WARM_UP_WORDS)} successful. "
-                f"Average response time: {self.average_response_time:.3f}s")
-        
-        # Save any themes
-        if hasattr(self.quality_tracker, 'theme_words_cache') and self.quality_tracker.theme_words_cache:
+        logger.info(
+            f"Warm-up completed in {duration:.2f}s. "
+            f"{success_count}/{len(settings.WARM_UP_WORDS)} successful. "
+            f"Average response time: {self.average_response_time:.3f}s"
+        )
+
+        if hasattr(self.quality_tracker, "theme_words_cache") and self.quality_tracker.theme_words_cache:
             await self.quality_tracker.save_theme_words()
-        
-        self.is_ready = True    
+
+        self.is_ready = True
     
     async def generate_response(self, user_input: str, used_words: List[str] = None, 
                             session_id: str = None, game_service = None,

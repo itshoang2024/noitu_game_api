@@ -1,8 +1,12 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, UniqueConstraint, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime
+from datetime import datetime, timezone
 from .base import Base
+
+
+def utc_now_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class Word(Base):
     __tablename__ = "words"
@@ -14,8 +18,8 @@ class Word(Base):
     syllable_count = Column(Integer)
     first_syllable = Column(String(50))
     last_syllable = Column(String(50))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
     
     # Relationships
     theme_words = relationship("ThemeWord", back_populates="word")
@@ -26,7 +30,7 @@ class Game(Base):
     
     id = Column(String(36), primary_key=True)  # UUID làm session_id
     theme_id = Column(Integer, ForeignKey("themes.id"), nullable=True)
-    start_time = Column(DateTime, default=datetime.utcnow)
+    start_time = Column(DateTime, default=utc_now_naive)
     end_time = Column(DateTime, nullable=True)
     status = Column(String(20), default="active")  # active, completed, abandoned
     duration_seconds = Column(Integer, nullable=True)
@@ -49,7 +53,7 @@ class GameMove(Base):
     is_player = Column(Boolean, default=True)  # True if player, False if AI
     quality_score = Column(Float)
     response_time_ms = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now_naive)
     
     # Relationships
     game = relationship("Game", back_populates="moves")
@@ -66,8 +70,8 @@ class Theme(Base):
     name = Column(String(50), unique=True, nullable=False)
     description = Column(Text, nullable=True)
     is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
     
     # Relationships
     theme_words = relationship("ThemeWord", back_populates="theme", cascade="all, delete-orphan")
@@ -79,7 +83,7 @@ class ThemeWord(Base):
     id = Column(Integer, primary_key=True, index=True)
     theme_id = Column(Integer, ForeignKey("themes.id"), nullable=False)
     word_id = Column(Integer, ForeignKey("words.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now_naive)
     
     # Relationships
     theme = relationship("Theme", back_populates="theme_words")
@@ -99,7 +103,7 @@ class AIMetric(Base):
     quality_score = Column(Float)
     game_id = Column(String(36), ForeignKey("games.id"), nullable=True)
     success = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now_naive)
     
     # Relationships
     game = relationship("Game")

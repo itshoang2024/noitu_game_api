@@ -1,12 +1,9 @@
 import logging
-import aiofiles
 import os
 from typing import Dict, List, Tuple, Set
 from app.utils.constants import DICTIONARY_PATH, COMMON_WORDS_PATH
-from app.database.base import get_db, get_async_db
+from app.database.base import get_async_db
 from app.database import crud
-from app.config import settings
-import asyncio
 from app.database.models import Word
 from sqlalchemy.future import select
 
@@ -33,43 +30,46 @@ class WordEvaluator:
         self.is_initialized = False
         self.word_chains: Dict[str, List[str]] = {}  # syllable -> list of words that start with it
 
+    async def _load_common_words_from_db(self, db):
+        common_words = await crud.get_all_common_words(db)
+        self.common_words = {word.word for word in common_words}
+        if self.common_words:
+            logger.info(f"Loaded {len(self.common_words)} common words from database")
+            return
+
+        await self._create_minimal_dictionary_in_db(db)
+        common_words = await crud.get_all_common_words(db)
+        self.common_words = {word.word for word in common_words}
+        logger.info(f"Loaded {len(self.common_words)} common words from database")
+
+    async def _load_dictionary_from_db(self, db):
+        result = await db.execute(select(Word))
+        all_words = result.scalars().all()
+        self.dictionary = {word.word for word in all_words}
+        if not self.dictionary:
+            self.dictionary = set(self.common_words)
+        logger.info(f"Loaded {len(self.dictionary)} words from database")
+
+    async def _initialize_from_database(self):
+        async for db in get_async_db():
+            await self._load_common_words_from_db(db)
+            await self._load_dictionary_from_db(db)
+
     async def initialize(self):
         """Load dictionaries from database"""
         if self.is_initialized:
             return
 
         try:
-            async for db in get_async_db():
-                # Lấy từ common từ database
-                common_words = await crud.get_all_common_words(db)
-                self.common_words = {word.word for word in common_words}
-                
-                # Nếu không có từ nào trong database, tạo từ điển tối thiểu
-                if not self.common_words:
-                    await self._create_minimal_dictionary_in_db(db)
-                    # Lấy lại sau khi tạo
-                    common_words = await crud.get_all_common_words(db)
-                    self.common_words = {word.word for word in common_words}
-                    
-                logger.info(f"Loaded {len(self.common_words)} common words from database")
-                
-                # Cache tất cả các từ để kiểm tra nhanh
-                result = await db.execute(select(Word))
-                all_words = result.scalars().all()
-                self.dictionary = {word.word for word in all_words}
-                logger.info(f"Loaded {len(self.dictionary)} words from database")
-                
-            # Important: Set is_initialized first before building word chains
-            self.is_initialized = True
-                
-            # Build word chains
-            await self.build_word_chains()
-                
-        except Exception as e:
-            logger.error(f"Error initializing WordEvaluator: {str(e)}")
-            # Still create a minimal dictionary in memory for fallback
+            await self._initialize_from_database()
+        except Exception as exc:
+            logger.error(f"Error initializing WordEvaluator: {str(exc)}")
             self._create_minimal_dictionary_in_memory()
-            self.is_initialized = True
+            if not self.common_words:
+                self._create_minimal_common_words()
+
+        self.is_initialized = True
+        await self.build_word_chains()
 
     def _create_minimal_dictionary_in_memory(self):
         """Create a minimal dictionary with common Vietnamese words"""

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app.utils.word_evaluator import WordEvaluator
 from app.services.ai_service import AIService
+from app.config import settings
 
 @pytest_asyncio.fixture
 async def word_evaluator():
@@ -38,9 +39,25 @@ async def test_word_evaluation(word_evaluator):
         assert score <= 0.5, f"Expected low score for '{word}', got {score}"
 
 @pytest.mark.asyncio
-async def test_high_quality_generation(ai_service):
+async def test_high_quality_generation(ai_service, monkeypatch):
     """Test high-quality word generation"""
     test_words = ["trường học", "bàn ghế", "nhà cửa"]
+
+    mocked_replies = {
+        "trường học": "học sinh",
+        "bàn ghế": "ghế đẩu",
+        "nhà cửa": "cửa sổ",
+    }
+
+    async def mock_generate_response(user_input: str, **kwargs):
+        return mocked_replies.get(user_input, "Lỗi: Không có dữ liệu test")
+
+    async def mock_add_metric(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(ai_service, "generate_response", mock_generate_response)
+    monkeypatch.setattr(ai_service.quality_tracker, "add_metric", mock_add_metric)
+    monkeypatch.setattr(settings, "USE_DATABASE", False)
     
     for word in test_words:
         response, score = await ai_service.generate_high_quality_response(word, max_attempts=3)
