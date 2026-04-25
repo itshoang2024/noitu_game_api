@@ -24,10 +24,10 @@ RUN python -m scripts.create_dictionary
 
 # Thêm script khởi tạo database
 COPY scripts/init_database.sh /app/scripts/
-RUN chmod +x /app/scripts/init_database.sh
+RUN sed -i 's/\r$//' /app/scripts/init_database.sh && chmod +x /app/scripts/init_database.sh
 
 # Mở cổng cho FastAPI
 EXPOSE 8800
 
 # Khởi động ứng dụng
-CMD ["/bin/bash", "-c", "/app/scripts/init_database.sh && python main.py"]
+CMD ["/bin/bash", "-c", "bash /app/scripts/init_database.sh && python main.py"]

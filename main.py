@@ -19,7 +19,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Nối Từ Game API",
         description="API cho game nối từ sử dụng Google Gemini",
-        version="2.2",
+        version="3.10",
     )
     app.add_middleware(
         CORSMiddleware,

@@ -46,7 +46,7 @@ RUN mkdir -p /app/data && chmod 777 /app/data
 
 # Thêm script khởi tạo database
 COPY scripts/init_database.sh /app/scripts/
-RUN chmod +x /app/scripts/init_database.sh
+RUN sed -i 's/\r$//' /app/scripts/init_database.sh && chmod +x /app/scripts/init_database.sh
 
 # Cập nhật CMD nếu cần thiết
-CMD ["/bin/bash", "-c", "/app/scripts/init_database.sh && gunicorn main:app --bind 0.0.0.0:8800 --worker-class uvicorn.workers.UvicornWorker --workers 4"]
+CMD ["/bin/bash", "-c", "bash /app/scripts/init_database.sh && gunicorn main:app --bind 0.0.0.0:8800 --worker-class uvicorn.workers.UvicornWorker --workers 4"]
