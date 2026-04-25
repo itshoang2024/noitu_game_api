@@ -1,5 +1,6 @@
 import os
 from typing import List, Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
@@ -116,6 +117,23 @@ class Settings(BaseSettings):
         "uvicorn": "WARNING",
         "uvicorn.access": "WARNING"
     }
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug_value(cls, value):
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            true_values = {"1", "true", "yes", "on", "debug", "development", "dev"}
+            false_values = {"0", "false", "no", "off", "release", "production", "prod"}
+            if normalized in true_values:
+                return True
+            if normalized in false_values:
+                return False
+
+        return value
 
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)

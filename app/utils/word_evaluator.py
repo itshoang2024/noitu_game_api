@@ -1,7 +1,8 @@
 import logging
 import os
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set, Tuple
 from app.utils.constants import DICTIONARY_PATH, COMMON_WORDS_PATH
+from app.utils.validators import validate_word_structure
 from app.database.base import get_async_db
 from app.database import crud
 from app.database.models import Word
@@ -179,7 +180,6 @@ class WordEvaluator:
             reasons.append("Từ tồn tại trong từ điển")
         else:
             # Check basic Vietnamese word structure
-            from app.utils.validators import validate_word_structure
             is_valid, _ = validate_word_structure(word)
             if is_valid:
                 score += 0.3
@@ -221,11 +221,11 @@ class WordEvaluator:
         """Get a reason description based on score"""
         if score >= 0.8:
             return "Từ chất lượng cao"
-        elif score >= 0.6:
+        if score >= 0.6:
             return "Từ chất lượng khá tốt"
-        elif score >= 0.4:
+        if score >= 0.4:
             return "Từ chất lượng trung bình"
-        elif score >= 0.2:
+        if score >= 0.2:
             return "Từ chất lượng thấp"
         else:
             return "Từ chất lượng rất thấp hoặc không hợp lệ"
@@ -246,11 +246,7 @@ class WordEvaluator:
             if len(syllables) >= 2:
                 first_syllable = syllables[0]
                 
-                # Add to chains
-                if first_syllable not in self.word_chains:
-                    self.word_chains[first_syllable] = []
-                    
-                self.word_chains[first_syllable].append(word)
+                self.word_chains.setdefault(first_syllable, []).append(word)
         
         logger.info(f"Built word chains for {len(self.word_chains)} syllables")
         

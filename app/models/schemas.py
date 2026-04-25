@@ -45,3 +45,30 @@ class NPCIntroRequest(BaseModel):
 class NPCIntroResponse(BaseModel):
     reply: str
     status: str
+
+
+class WordValidationRequest(BaseModel):
+    word: str = Field(default="", description="Word to validate")
+
+
+class WordMeaningRequest(BaseModel):
+    word: str = Field(default="", description="Word to check for meaning")
+
+
+class DictionaryWordRequest(BaseModel):
+    word: str = Field(default="", description="Word to add into dictionary")
+
+
+class ThemeWordsUpdateRequest(BaseModel):
+    theme: str = Field(default="", description="Theme identifier")
+    words: List[str] = Field(default_factory=list, description="Words for this theme")
+
+
+class WordPairRequest(BaseModel):
+    input_word: str = Field(default="", description="Input word from player")
+    response_word: str = Field(default="", description="Response word to validate")
+
+
+class StartingWordRequest(BaseModel):
+    session_id: str = Field(default="", description="Game session identifier")
+    theme: Optional[str] = Field(default="random", description="Requested theme")

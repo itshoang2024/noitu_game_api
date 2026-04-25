@@ -1,12 +1,12 @@
 import logging
 import random
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_ai_service, get_game_service
 from app.config import settings
-from app.models.schemas import SessionResponse, WordResponse
+from app.models.schemas import SessionResponse, StartingWordRequest, WordPairRequest, WordResponse
 from app.services.ai_service import AIService
 from app.services.game_service import GameService
 from app.utils.constants import DEFAULT_GAME_THEME_IDS, DEFAULT_GAME_THEMES
@@ -108,6 +108,17 @@ def _build_theme_payload(ai_service: AIService) -> List[Dict[str, object]]:
     return default_themes + custom_themes
 
 
+def _extract_starting_word_request(data: Union[StartingWordRequest, dict]) -> Tuple[str, str]:
+    if isinstance(data, dict):
+        session_id = data.get("session_id")
+        theme = data.get("theme", "random")
+    else:
+        session_id = data.session_id
+        theme = data.theme or "random"
+
+    return session_id, str(theme or "random").strip().lower()
+
+
 @router.get("/start", response_model=SessionResponse)
 async def start_game(game_service: GameService = Depends(get_game_service)):
     """Bắt đầu một phiên chơi mới"""
@@ -129,14 +140,13 @@ async def get_game_stats(
 
 @router.post("/check_pair")
 async def check_word_pair(
-    req: Request,
+    data: WordPairRequest,
     game_service: GameService = Depends(get_game_service),
 ):
     """Check if a word pair follows the game rules"""
     try:
-        data = await req.json()
-        input_word = data.get("input_word", "").strip().lower()
-        response_word = data.get("response_word", "").strip().lower()
+        input_word = data.input_word.strip().lower()
+        response_word = data.response_word.strip().lower()
 
         if not input_word or not response_word:
             raise HTTPException(status_code=400, detail="Vui lòng cung cấp cả hai từ")
@@ -155,13 +165,12 @@ async def check_word_pair(
 
 @router.post("/new_word", response_model=WordResponse)
 async def get_starting_word(
-    data: dict = Body(...),
+    data: StartingWordRequest,
     ai_service: AIService = Depends(get_ai_service),
     game_service: GameService = Depends(get_game_service),
 ):
     """Trả về một từ bắt đầu cho phiên chơi với khả năng tùy chọn chủ đề"""
-    session_id = data.get("session_id")
-    theme = str(data.get("theme", "random") or "random").strip().lower()
+    session_id, theme = _extract_starting_word_request(data)
     if not session_id:
         raise HTTPException(status_code=400, detail="Thiếu session_id")
 

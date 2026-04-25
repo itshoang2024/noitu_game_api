@@ -1,124 +1,113 @@
-from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
+import logging
 from typing import List
 
-from app.services.ai_service import AIService
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+
 from app.api.dependencies import get_ai_service
+from app.models.schemas import DictionaryWordRequest, ThemeWordsUpdateRequest
+from app.services.ai_service import AIService
 from app.utils.validators import validate_word_structure
 
-import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dictionary", tags=["dictionary"])
 
+
+def _normalize_words(words: List[str]) -> List[str]:
+    normalized_words: List[str] = []
+    for word in words:
+        if not isinstance(word, str):
+            continue
+
+        normalized_word = word.strip().lower()
+        if len(normalized_word.split()) >= 2:
+            normalized_words.append(normalized_word)
+
+    return normalized_words
+
+
 @router.get("/stats")
 async def get_dictionary_stats(ai_service: AIService = Depends(get_ai_service)):
-    """Get statistics about the word dictionary"""
+    """Get statistics about the word dictionary."""
     word_evaluator = ai_service.word_evaluator
-    
     await word_evaluator.ensure_initialized()
-    
     return {
         "dictionary_size": len(word_evaluator.dictionary),
         "common_words_count": len(word_evaluator.common_words),
-        "evaluated_words_count": len(word_evaluator.word_scores)
+        "evaluated_words_count": len(word_evaluator.word_scores),
     }
+
 
 @router.post("/add")
 async def add_word_to_dictionary(
-    req: Request,
-    ai_service: AIService = Depends(get_ai_service)
+    data: DictionaryWordRequest,
+    ai_service: AIService = Depends(get_ai_service),
 ):
-    """Add a word to the dictionary"""
+    """Add a word to the dictionary."""
     try:
-        data = await req.json()
-        word = data.get("word", "").strip().lower()
-        
+        word = data.word.strip().lower()
         if not word:
             raise HTTPException(status_code=400, detail="Từ không được để trống")
-        
-        word_evaluator = ai_service.word_evaluator
-        
-        # Validate basic structure
+
         is_valid, reason = validate_word_structure(word)
-        
         if not is_valid:
             return {"status": "error", "message": f"Từ có cấu trúc không hợp lệ: {reason}"}
-        
-        # Add to dictionary
-        result = await word_evaluator.add_to_dictionary(word)
-        
-        if result:
-            # Invalidate cache
-            ai_service.quality_scores = {}
-            return {"status": "success", "message": f"Đã thêm từ '{word}' vào từ điển"}
-        else:
+
+        if not await ai_service.word_evaluator.add_to_dictionary(word):
             return {"status": "error", "message": f"Không thể thêm từ '{word}' vào từ điển"}
-    
-    except Exception as e:
-        logger.error(f"Error adding word to dictionary: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Lỗi: {str(e)}")
+
+        ai_service.quality_scores = {}
+        return {"status": "success", "message": f"Đã thêm từ '{word}' vào từ điển"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error adding word to dictionary: {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi: {str(exc)}")
+
 
 @router.post("/update_theme_words")
 async def update_theme_words(
-    req: Request,
-    ai_service: AIService = Depends(get_ai_service)
+    data: ThemeWordsUpdateRequest,
+    background_tasks: BackgroundTasks,
+    ai_service: AIService = Depends(get_ai_service),
 ):
-    """Cập nhật danh sách từ theo chủ đề từ nguồn bên ngoài"""
+    """Update theme words from an external source."""
     try:
-        data = await req.json()
-        theme = data.get("theme")
-        words = data.get("words", [])
-        
+        theme = data.theme.strip().lower()
         if not theme:
             raise HTTPException(status_code=400, detail="Thiếu thông tin về chủ đề")
-        
-        if not words or not isinstance(words, list):
-            raise HTTPException(status_code=400, detail="Danh sách từ không hợp lệ")
-        
-        # Lọc các từ hợp lệ (ít nhất 2 âm tiết)
-        valid_words = []
-        for word in words:
-            if not isinstance(word, str):
-                continue
-                
-            word = word.strip().lower()
-            if len(word.split()) >= 2:
-                valid_words.append(word)
-        
+
+        valid_words = _normalize_words(data.words)
         if not valid_words:
             return {"status": "error", "message": "Không có từ hợp lệ nào để cập nhật"}
-        
-        # Thực hiện cập nhật vào bộ nhớ đệm
+
         ai_service.quality_tracker.theme_words_cache[theme] = valid_words
-        
-        # Thực hiện đánh giá chất lượng trong nền
-        background_tasks = BackgroundTasks()
         background_tasks.add_task(evaluate_theme_words_quality, ai_service, theme, valid_words)
-        
         return {
-            "status": "success", 
+            "status": "success",
             "message": f"Đã cập nhật {len(valid_words)} từ cho chủ đề '{theme}'",
-            "words": valid_words
+            "words": valid_words,
         }
-    
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Lỗi khi cập nhật từ theo chủ đề: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Lỗi hệ thống: {str(e)}")
+    except Exception as exc:
+        logger.error(f"Lỗi khi cập nhật từ theo chủ đề: {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi hệ thống: {str(exc)}")
+
 
 async def evaluate_theme_words_quality(ai_service: AIService, theme: str, words: List[str]):
-    """Đánh giá chất lượng từ theo chủ đề trong nền"""
+    """Evaluate theme word quality in the background."""
     logger.info(f"Bắt đầu đánh giá chất lượng {len(words)} từ cho chủ đề '{theme}'")
-    
-    for word in words:
-        if word not in ai_service.quality_scores:
-            try:
-                quality, reason = await ai_service.word_evaluator.evaluate_word(word)
-                ai_service.quality_scores[word] = quality
-                logger.debug(f"Đánh giá từ '{word}': {quality:.2f} - {reason}")
-            except Exception as e:
-                logger.error(f"Lỗi đánh giá từ '{word}': {str(e)}")
-    
-    logger.info(f"Hoàn thành đánh giá từ cho chủ đề '{theme}'")
 
+    for word in words:
+        if word in ai_service.quality_scores:
+            continue
+
+        try:
+            quality, reason = await ai_service.word_evaluator.evaluate_word(word)
+            ai_service.quality_scores[word] = quality
+            logger.debug(f"Đánh giá từ '{word}': {quality:.2f} - {reason}")
+        except Exception as exc:
+            logger.error(f"Lỗi đánh giá từ '{word}': {str(exc)}")
+
+    logger.info(f"Hoàn thành đánh giá từ cho chủ đề '{theme}'")

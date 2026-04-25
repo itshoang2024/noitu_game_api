@@ -154,3 +154,7 @@ async def test_new_word_works_for_db_session_missing_from_memory(monkeypatch, is
     assert response.answer == "học sinh"
     assert fake_db.moves[session_id] == ["học sinh"]
     assert isolated_game_service.used_words[session_id] == ["học sinh"]
+
+
+if __name__ == "__main__":
+    pytest.main(["-xvs", __file__])

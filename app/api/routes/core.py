@@ -1,11 +1,11 @@
 import logging
 from typing import Optional, Tuple
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
 from app.api.dependencies import get_game_service, validate_service_ready
 from app.config import settings
-from app.models.schemas import WordResponse
+from app.models.schemas import WordRequest, WordResponse
 from app.services.ai_service import AIService
 from app.services.game_service import GameService
 from app.utils.validators import validate_word_structure
@@ -170,16 +170,15 @@ async def _generate_quality_response(
 
 @router.post("/ask", response_model=WordResponse)
 async def ask_ai(
-    req: Request,
+    data: WordRequest,
     background_tasks: BackgroundTasks,
     ai_service: AIService = Depends(validate_service_ready),
     game_service: GameService = Depends(get_game_service),
 ):
     """Main endpoint to get word responses"""
     try:
-        data = await req.json()
-        user_input = data.get("prompt", "").strip().lower()
-        session_id = data.get("session_id", "default")
+        user_input = data.prompt.strip().lower()
+        session_id = data.session_id or "default"
 
         await _validate_input_word(user_input, session_id, game_service)
 

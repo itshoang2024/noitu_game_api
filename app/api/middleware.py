@@ -50,6 +50,14 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
         self.request_timestamps = {}
+
+    def _prune_old_timestamps(self, current_time: float) -> None:
+        cutoff_time = current_time - 60
+        self.request_timestamps = {
+            ip: [timestamp for timestamp in timestamps if timestamp > cutoff_time]
+            for ip, timestamps in self.request_timestamps.items()
+            if timestamps and timestamps[-1] > cutoff_time
+        }
         
     async def dispatch(self, request: Request, call_next):
         # Get client IP
@@ -57,29 +65,18 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         
         # Clean up old timestamps
         current_time = time.time()
-        self.request_timestamps = {
-            ip: timestamps for ip, timestamps in self.request_timestamps.items()
-            if timestamps[-1] > current_time - 60  # Keep last minute
-        }
+        self._prune_old_timestamps(current_time)
         
         # Check rate limit
-        if client_ip in self.request_timestamps:
-            timestamps = self.request_timestamps[client_ip]
-            # Count requests in the last minute
-            recent_requests = sum(1 for ts in timestamps if ts > current_time - 60)
-            
-            if recent_requests >= self.requests_per_minute:
-                logger.warning(f"Rate limit exceeded for {client_ip}")
-                return Response(
-                    content="Rate limit exceeded. Please try again later.",
-                    status_code=429
-                )
-            
-            # Add current timestamp
-            timestamps.append(current_time)
-        else:
-            # New client
-            self.request_timestamps[client_ip] = [current_time]
+        timestamps = self.request_timestamps.setdefault(client_ip, [])
+        if len(timestamps) >= self.requests_per_minute:
+            logger.warning(f"Rate limit exceeded for {client_ip}")
+            return Response(
+                content="Rate limit exceeded. Please try again later.",
+                status_code=429
+            )
+
+        timestamps.append(current_time)
         
         # Process the request
         return await call_next(request)

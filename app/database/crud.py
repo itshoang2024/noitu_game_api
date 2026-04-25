@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.future import select
-from sqlalchemy import func, or_
-from typing import List, Optional, Dict, Tuple
+from sqlalchemy import func
+from typing import Dict, List, Optional
 from datetime import datetime, timezone
 
 from .models import Word, Game, GameMove, Theme, ThemeWord, AIMetric
@@ -10,13 +10,18 @@ from .models import Word, Game, GameMove, Theme, ThemeWord, AIMetric
 def utc_now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
+
+def _normalize_word(word: str) -> str:
+    return word.lower().strip()
+
 # --- Word operations ---
 
 async def create_word(db: Session, word: str, quality_score: float = 0.5, is_common: bool = False) -> Word:
     """Tạo một từ mới trong database"""
-    syllables = word.lower().strip().split()
+    normalized_word = _normalize_word(word)
+    syllables = normalized_word.split()
     word_obj = Word(
-        word=word.lower().strip(),
+        word=normalized_word,
         quality_score=quality_score,
         is_common=is_common,
         syllable_count=len(syllables),
@@ -30,7 +35,7 @@ async def create_word(db: Session, word: str, quality_score: float = 0.5, is_com
 
 async def get_word(db: Session, word: str) -> Optional[Word]:
     """Lấy từ từ database theo text"""
-    result = await db.execute(select(Word).filter(Word.word == word.lower().strip()))
+    result = await db.execute(select(Word).filter(Word.word == _normalize_word(word)))
     return result.scalars().first()
 
 async def get_or_create_word(db: Session, word: str, quality_score: float = 0.5) -> Word:
@@ -42,17 +47,17 @@ async def get_or_create_word(db: Session, word: str, quality_score: float = 0.5)
 
 async def get_words_by_first_syllable(db: Session, syllable: str) -> List[Word]:
     """Lấy các từ bắt đầu bằng âm tiết cho trước"""
-    result = await db.execute(select(Word).filter(Word.first_syllable == syllable.lower().strip()))
+    result = await db.execute(select(Word).filter(Word.first_syllable == _normalize_word(syllable)))
     return result.scalars().all()
 
 async def get_words_by_last_syllable(db: Session, syllable: str) -> List[Word]:
     """Lấy các từ kết thúc bằng âm tiết cho trước"""
-    result = await db.execute(select(Word).filter(Word.last_syllable == syllable.lower().strip()))
+    result = await db.execute(select(Word).filter(Word.last_syllable == _normalize_word(syllable)))
     return result.scalars().all()
 
 async def get_all_common_words(db: Session) -> List[Word]:
     """Lấy tất cả các từ phổ biến"""
-    result = await db.execute(select(Word).filter(Word.is_common == True))
+    result = await db.execute(select(Word).filter(Word.is_common.is_(True)))
     return result.scalars().all()
 
 async def update_word_quality(db: Session, word_id: int, quality_score: float) -> Word:
@@ -141,7 +146,7 @@ async def is_word_used_in_game(db: Session, game_id: str, word: str) -> bool:
     result = await db.execute(
         select(func.count()).select_from(GameMove).filter(
             GameMove.game_id == game_id,
-            func.lower(GameMove.word_text) == word.lower().strip()
+            func.lower(GameMove.word_text) == _normalize_word(word)
         )
     )
     return result.scalar() > 0
@@ -232,7 +237,7 @@ async def get_ai_performance_stats(db: Session) -> Dict:
     total = result.scalar()
     
     # Số lượt thành công
-    result = await db.execute(select(func.count()).select_from(AIMetric).filter(AIMetric.success == True))
+    result = await db.execute(select(func.count()).select_from(AIMetric).filter(AIMetric.success.is_(True)))
     success_count = result.scalar()
     
     # Thời gian phản hồi trung bình

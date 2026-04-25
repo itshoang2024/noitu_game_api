@@ -1,18 +1,15 @@
 import asyncio
 import time
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 import httpx
 from asyncio import Semaphore
 
 from datetime import datetime
-import json
-import os
 
 from app.config import settings
 from app.utils.word_evaluator import WordEvaluator
-from app.utils.constants import QUALITY_METRICS_PATH
-from app.database.base import get_db, get_async_db
+from app.database.base import get_async_db
 from app.database import crud
 from sqlalchemy.future import select
 from app.database.models import AIMetric
@@ -83,6 +80,39 @@ class QualityTracker:
                 )
         except Exception as e:
             logger.error(f"Error adding metric to database: {str(e)}")
+
+    def get_summary_stats(self) -> Dict[str, Union[int, float]]:
+        """Return aggregate quality statistics for recent metrics."""
+        if not self.metrics:
+            return {
+                "total_metrics": 0,
+                "average_score": 0.0,
+                "max_score": 0.0,
+                "min_score": 0.0,
+                "high_quality_count": 0,
+            }
+
+        scores = [
+            metric["score"]
+            for metric in self.metrics
+            if isinstance(metric.get("score"), (int, float))
+        ]
+        if not scores:
+            return {
+                "total_metrics": len(self.metrics),
+                "average_score": 0.0,
+                "max_score": 0.0,
+                "min_score": 0.0,
+                "high_quality_count": 0,
+            }
+
+        return {
+            "total_metrics": len(self.metrics),
+            "average_score": round(sum(scores) / len(scores), 4),
+            "max_score": round(max(scores), 4),
+            "min_score": round(min(scores), 4),
+            "high_quality_count": sum(score >= 0.7 for score in scores),
+        }
 
     async def load_theme_words(self):
         """Tải danh sách từ theo chủ đề từ database"""
@@ -463,7 +493,12 @@ class AIService:
         start_time = time.time()
         
         for attempt in range(max_attempts):
-            response = await self.generate_response(user_input, use_cache=(attempt == 0))
+            response = await self.generate_response(
+                user_input,
+                session_id=session_id,
+                game_service=game_service,
+                use_cache=(attempt == 0),
+            )
             
             # Skip error responses
             if response.startswith("Lỗi:"):
