@@ -46,14 +46,8 @@ noitu_api_*.log
 *.zip
 *.tar.gz
 
-# Node modules (if any frontend in same repo)
-node_modules/
-
 # Cache folders
 .cache/
-
-# VSCode Temp Files
-tempCodeRunnerFile.py
 
 # Database files
 *.db
@@ -66,3 +60,5 @@ alembic/versions/*.py
 
 # Để test database
 !data/test_template.db
+
+docs/prompt-pack/
