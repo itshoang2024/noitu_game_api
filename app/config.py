@@ -1,11 +1,18 @@
+import json
 import os
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
+DEFAULT_MODEL_POOL = [
+    "gemini-3.1-flash-lite-preview",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+]
 
 class Settings(BaseSettings):
     # API Configuration
@@ -14,7 +21,8 @@ class Settings(BaseSettings):
     
     # Gemini API Configuration
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    MODEL_ID: str = os.getenv("MODEL_ID", "gemini-3.1-flash-lite-preview")
+    MODEL_ID: str = os.getenv("MODEL_ID", DEFAULT_MODEL_POOL[0])
+    MODEL_POOL: Annotated[List[str], NoDecode] = DEFAULT_MODEL_POOL.copy()
     GEMINI_API_URL: str = f"https://generativelanguage.googleapis.com/v1beta/models/{{model_id}}:generateContent?key={{api_key}}"
     
     # Performance settings
@@ -132,6 +140,24 @@ class Settings(BaseSettings):
                 return True
             if normalized in false_values:
                 return False
+
+        return value
+
+    @field_validator("MODEL_POOL", mode="before")
+    @classmethod
+    def parse_model_pool(cls, value):
+        if isinstance(value, str):
+            normalized = value.strip()
+            if not normalized:
+                return []
+            if normalized.startswith("["):
+                try:
+                    parsed = json.loads(normalized)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except json.JSONDecodeError:
+                    pass
+            return [item.strip() for item in normalized.split(",") if item.strip()]
 
         return value
 

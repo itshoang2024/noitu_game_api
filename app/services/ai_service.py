@@ -155,6 +155,7 @@ class QualityTracker:
 class AIService:
     """Service for interacting with Gemini AI API"""
     _instance = None
+    NORMAL_RESPONSE_FALLBACK = "Lễ hội hôm nay đông vui thật, mình thấy vui khi được ở đây."
     
     @classmethod
     def get_instance(cls):
@@ -189,6 +190,70 @@ class AIService:
         if self.http_client:
             await self.http_client.aclose()
             logger.info("HTTP client closed")
+
+    def _extract_http_error_details(self, exc: httpx.HTTPStatusError) -> str:
+        try:
+            error_data = exc.response.json()
+            return error_data.get("error", {}).get("message", exc.response.text)
+        except Exception:
+            return exc.response.text or str(exc)
+
+    def _get_model_pool(self) -> List[str]:
+        configured_pool = settings.MODEL_POOL or []
+        if isinstance(configured_pool, str):
+            configured_pool = [item.strip() for item in configured_pool.split(",") if item.strip()]
+
+        model_pool = []
+        for model_id in [settings.MODEL_ID, *configured_pool]:
+            normalized_model_id = str(model_id).strip()
+            if normalized_model_id and normalized_model_id not in model_pool:
+                model_pool.append(normalized_model_id)
+
+        return model_pool or [settings.MODEL_ID]
+
+    def _build_gemini_api_url(self, model_id: str) -> str:
+        return settings.GEMINI_API_URL.format(
+            model_id=model_id,
+            api_key=settings.GEMINI_API_KEY
+        )
+
+    def _should_fallback_model(self, exc: httpx.HTTPStatusError) -> bool:
+        return exc.response.status_code == 503
+
+    async def _post_gemini_with_model_pool(self, payload: dict, request_label: str) -> Tuple[httpx.Response, str]:
+        model_pool = self._get_model_pool()
+        last_error = None
+
+        for index, model_id in enumerate(model_pool):
+            try:
+                response = await self.http_client.post(
+                    self._build_gemini_api_url(model_id),
+                    json=payload,
+                )
+                response.raise_for_status()
+                return response, model_id
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                if not self._should_fallback_model(exc):
+                    raise
+
+                if index >= len(model_pool) - 1:
+                    raise
+
+                next_model_id = model_pool[index + 1]
+                error_details = self._extract_http_error_details(exc)
+                logger.warning(
+                    "Gemini model %s returned HTTP 503 for %s: %s. Trying fallback model %s.",
+                    model_id,
+                    request_label,
+                    error_details,
+                    next_model_id,
+                )
+
+        if last_error:
+            raise last_error
+
+        raise RuntimeError("No Gemini model configured")
 
     async def _ensure_warm_up_dependencies(self):
         await self.initialize()
@@ -375,15 +440,10 @@ class AIService:
                 try:
                     start_time = time.time()
                     
-                    # Get the URL with actual model ID and API key
-                    api_url = settings.GEMINI_API_URL.format(
-                        model_id=settings.MODEL_ID,
-                        api_key=settings.GEMINI_API_KEY
+                    response, model_id = await self._post_gemini_with_model_pool(
+                        payload,
+                        request_label="word generation",
                     )
-                    
-                    # Send request to Gemini API
-                    response = await self.http_client.post(api_url, json=payload)
-                    response.raise_for_status()
                     result = response.json()
                     
                     # Track response time
@@ -433,6 +493,7 @@ class AIService:
                         if reply and not reply.startswith("Lỗi:"):
                             self.word_cache[user_input] = reply
                             self.successful_requests += 1
+                            logger.debug("Gemini model %s generated word response", model_id)
                         else:
                             self.failed_requests += 1
                         return reply
@@ -452,6 +513,7 @@ class AIService:
                         self.word_cache[user_input] = reply
                         self.quality_scores[reply] = quality_score
                         self.successful_requests += 1
+                        logger.debug("Gemini model %s generated word response", model_id)
                     else:
                         self.failed_requests += 1
                     
@@ -463,12 +525,7 @@ class AIService:
                         logger.error(f"Failed after {max_retries} retries: {str(e)}")
                         self.failed_requests += 1
                         if isinstance(e, httpx.HTTPStatusError):
-                            error_details = "Unknown error"
-                            try:
-                                error_data = e.response.json()
-                                error_details = error_data.get("error", {}).get("message", e.response.text)
-                            except Exception:
-                                error_details = e.response.text
+                            error_details = self._extract_http_error_details(e)
                             return f"Lỗi: Gemini API trả về lỗi {e.response.status_code}. Chi tiết: {error_details}"
                         return f"Lỗi: Không thể kết nối đến Gemini ({type(e).__name__})."
                     
@@ -544,7 +601,7 @@ class AIService:
                 
         return best_response or "Lỗi: Không thể tạo từ chất lượng cao.", best_score
     
-    async def generate_normal_response(self, user_input: str) -> str:
+    async def generate_normal_response(self, user_input: str, max_retries: int = settings.MAX_RETRIES) -> str:
         prompt_text = f"{user_input}"
 
         # Prepare API payload
@@ -561,41 +618,101 @@ class AIService:
             "safetySettings": settings.SAFETY_SETTINGS
         }
 
-        try:
-            # Get the URL with actual model ID and API key
-            api_url = settings.GEMINI_API_URL.format(
-                model_id=settings.MODEL_ID,
-                api_key=settings.GEMINI_API_KEY
-            )
-        
-            # Send request to Gemini API
-            response = await self.http_client.post(api_url, json=payload)
-            response.raise_for_status()
-            result = response.json()
-        
-            # Parse response
-            if not result.get("candidates"):
-                return "Chúc bạn ngày vui vẻ!"
-        
-            # Extract text from response
-            first_candidate = result["candidates"][0]
-            if "content" not in first_candidate or "parts" not in first_candidate["content"]:
-                return "Chúc bạn ngày vui vẻ!"
-        
-            reply_parts = first_candidate["content"]["parts"]
-            if not reply_parts or "text" not in reply_parts[0]:
-                return "Chúc bạn ngày vui vẻ!"
-        
-            reply = reply_parts[0]["text"].strip()
-        
-            # Return the generated reply
-            return reply
+        self.total_requests += 1
 
-        except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            return f"Lỗi: Không thể kết nối đến Gemini ({type(e).__name__})."
+        async with self.request_semaphore:
+            retries = 0
+            while retries <= max_retries:
+                try:
+                    start_time = time.time()
 
-        except Exception as e:
-            return f"Lỗi: Lỗi máy chủ nội bộ khi xử lý yêu cầu ({type(e).__name__})."
+                    response, model_id = await self._post_gemini_with_model_pool(
+                        payload,
+                        request_label="normal response",
+                    )
+                    result = response.json()
+
+                    response_time = time.time() - start_time
+                    self.average_response_time = (
+                        self.average_response_time * self.successful_requests + response_time
+                    ) / (self.successful_requests + 1)
+
+                    if not result.get("candidates"):
+                        feedback = result.get("promptFeedback")
+                        block_reason = feedback.get("blockReason", "No candidates found") if feedback else "No candidates found"
+                        logger.warning(f"Gemini normal response returned no candidates: {block_reason}")
+                        self.failed_requests += 1
+                        return self.NORMAL_RESPONSE_FALLBACK
+
+                    first_candidate = result["candidates"][0]
+                    if "content" not in first_candidate or "parts" not in first_candidate["content"]:
+                        logger.warning("Gemini normal response had unexpected response structure")
+                        self.failed_requests += 1
+                        return self.NORMAL_RESPONSE_FALLBACK
+
+                    reply_parts = first_candidate["content"]["parts"]
+                    if not reply_parts or "text" not in reply_parts[0]:
+                        logger.warning("Gemini normal response was missing text content")
+                        self.failed_requests += 1
+                        return self.NORMAL_RESPONSE_FALLBACK
+
+                    reply = reply_parts[0]["text"].strip()
+                    if not reply:
+                        logger.warning("Gemini normal response was empty")
+                        self.failed_requests += 1
+                        return self.NORMAL_RESPONSE_FALLBACK
+
+                    logger.debug("Gemini model %s generated normal response", model_id)
+                    self.successful_requests += 1
+                    return reply
+
+                except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                    retries += 1
+                    if retries > max_retries:
+                        self.failed_requests += 1
+                        if isinstance(e, httpx.HTTPStatusError):
+                            error_details = self._extract_http_error_details(e)
+                            logger.error(
+                                "Gemini normal response failed after %s retries with HTTP %s: %s",
+                                max_retries,
+                                e.response.status_code,
+                                error_details,
+                            )
+                        else:
+                            logger.error(
+                                "Gemini normal response failed after %s retries: %s",
+                                max_retries,
+                                str(e),
+                            )
+                        return self.NORMAL_RESPONSE_FALLBACK
+
+                    wait_time = 0.5 * (2 ** retries)
+                    if isinstance(e, httpx.HTTPStatusError):
+                        error_details = self._extract_http_error_details(e)
+                        logger.warning(
+                            "Retry %s/%s for normal Gemini response after HTTP %s: %s",
+                            retries,
+                            max_retries,
+                            e.response.status_code,
+                            error_details,
+                        )
+                    else:
+                        logger.warning(
+                            "Retry %s/%s for normal Gemini response after request error: %s",
+                            retries,
+                            max_retries,
+                            str(e),
+                        )
+                    await asyncio.sleep(wait_time)
+
+                except Exception as e:
+                    logger.error(
+                        "Unexpected error while generating normal Gemini response: %s",
+                        str(e),
+                        exc_info=True,
+                    )
+                    self.failed_requests += 1
+                    return self.NORMAL_RESPONSE_FALLBACK
 
     def get_cached_words(self) -> int:
         """Get the number of cached words"""
