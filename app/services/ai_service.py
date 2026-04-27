@@ -316,6 +316,10 @@ class AIService:
 
     async def warm_up_model(self):
         """Warm up the model with an adaptive, efficient strategy"""
+        if not settings.ENABLE_WARM_UP:
+            logger.info("Skipping model warm-up because ENABLE_WARM_UP=False")
+            return
+
         logger.info("Starting model warm-up with adaptive strategy...")
 
         await self._ensure_warm_up_dependencies()

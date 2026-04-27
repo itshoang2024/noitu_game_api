@@ -47,8 +47,11 @@ async def startup_event():
     await word_evaluator.initialize()
 
     ai_service = AIService.get_instance()
-    logger.info("Bắt đầu warm-up model...")
-    asyncio.create_task(ai_service.warm_up_model())
+    if settings.ENABLE_WARM_UP:
+        logger.info("Bắt đầu warm-up model...")
+        asyncio.create_task(ai_service.warm_up_model())
+    else:
+        logger.info("Warm-up disabled by ENABLE_WARM_UP=False")
 
 
 @app.on_event("shutdown")
